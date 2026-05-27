@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: { version: stable }
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: contracts
+      - run: cd contracts && forge install foundry-rs/forge-std --no-commit
+      - run: cd contracts && pnpm hardhat compile
+      - run: cd contracts && pnpm hardhat test
+      - run: cd contracts && forge test -vv
+
+  shared-matcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: shared
+      - run: cd shared && pnpm test
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: matcher
+      - run: cd matcher && pnpm lint && pnpm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: pnpm install --frozen-lockfile=false
+        working-directory: frontend
+      - run: cd frontend && pnpm typecheck && pnpm build
+        env:
+          NEXT_PUBLIC_WALLETCONNECT_ID: dummy-for-ci

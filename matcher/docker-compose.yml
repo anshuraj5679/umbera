@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: darkpool
+      POSTGRES_PASSWORD: darkpool
+      POSTGRES_DB: darkpool
+    ports: ["5432:5432"]
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniominio
+  matcher:
+    build: .
+    depends_on: [postgres, minio]
+    env_file: ../.env
+    environment:
+      RDS_URL: postgres://darkpool:darkpool@postgres:5432/darkpool
+    ports: ["8080:8080"]

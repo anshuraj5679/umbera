@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "..",
+    "module": "ESNext",
+    "baseUrl": ".",
+    "paths": { "@darkpool/shared/*": ["../shared/*"] }
+  },
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "../shared/auction/auction.ts",
+    "../shared/auction/index.ts",
+    "../shared/auction/pricing.ts",
+    "../shared/auction/types.ts",
+    "../shared/commitments/**/*.ts",
+    "../shared/addresses/**/*.ts"
+  ],
+  "exclude": ["dist", "node_modules", "test"]
+}

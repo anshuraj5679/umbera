@@ -1,0 +1,130 @@
+{
+  "chainId": 421614,
+  "deployedAt": "2026-05-27T18:12:40.799Z",
+  "dex": "0x08D59a1F305ED0107040F9B83615518310B292F4",
+  "admin": "0x6b3a924379B9408D8110f10F084ca809863B378A",
+  "matcher": "0x6b3a924379B9408D8110f10F084ca809863B378A",
+  "feeCollector": "0x6b3a924379B9408D8110f10F084ca809863B378A",
+  "pairs": [
+    {
+      "id": 0,
+      "base": {
+        "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+        "symbol": "eUSDC",
+        "decimals": 6
+      },
+      "quote": {
+        "address": "0xEFd4d387b41252afe221f8B38001B1447C281Ca6",
+        "symbol": "eWETH",
+        "decimals": 18
+      }
+    },
+    {
+      "id": 1,
+      "base": {
+        "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+        "symbol": "eUSDC",
+        "decimals": 6
+      },
+      "quote": {
+        "address": "0x8E4e90511957701b25AF5594fed5359f7bC3f4E2",
+        "symbol": "eWBTC",
+        "decimals": 8
+      }
+    },
+    {
+      "id": 2,
+      "base": {
+        "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+        "symbol": "eUSDC",
+        "decimals": 6
+      },
+      "quote": {
+        "address": "0x3e064B22aE51213e42A8807677fe35A7A0795B39",
+        "symbol": "eARB",
+        "decimals": 18
+      }
+    },
+    {
+      "id": 3,
+      "base": {
+        "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+        "symbol": "eUSDC",
+        "decimals": 6
+      },
+      "quote": {
+        "address": "0xDd05c0e60E37d699470e45807B1d7A83bec50fb2",
+        "symbol": "eLINK",
+        "decimals": 18
+      }
+    }
+  ],
+  "underlying": {
+    "mUSDC": "0xc7DDa25d445ca18d3807d99b5f67Fa4B0a3806F6",
+    "mWETH": "0x13C16f09028A7A1a7b78a3E8722FcbA26c02dea6",
+    "mWBTC": "0xaba0cefc467AB51F3FA750e7f0aB1Aa93f803196",
+    "mARB": "0x3842453f90f8edDA1b6A6D9603cF524eFf1d2338",
+    "mLINK": "0x6aD75aa89Cfa667dFe96cd65BBd97A5a24f21A5a"
+  },
+  "updatedAt": "2026-05-27T18:12:40.799Z",
+  "previousDex": "0x3640FbFaA5FD8e0ADFf88F755953a91332B3e390",
+  "previousDeployment": {
+    "dex": "0x3640FbFaA5FD8e0ADFf88F755953a91332B3e390",
+    "deployedAt": "2026-05-27T05:42:52.348Z",
+    "updatedAt": "2026-05-27T05:43:17.851Z",
+    "pairs": [
+      {
+        "id": 0,
+        "base": {
+          "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+          "symbol": "eUSDC",
+          "decimals": 6
+        },
+        "quote": {
+          "address": "0xEFd4d387b41252afe221f8B38001B1447C281Ca6",
+          "symbol": "eWETH",
+          "decimals": 18
+        }
+      },
+      {
+        "id": 1,
+        "base": {
+          "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+          "symbol": "eUSDC",
+          "decimals": 6
+        },
+        "quote": {
+          "address": "0x8E4e90511957701b25AF5594fed5359f7bC3f4E2",
+          "symbol": "eWBTC",
+          "decimals": 8
+        }
+      },
+      {
+        "id": 2,
+        "base": {
+          "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+          "symbol": "eUSDC",
+          "decimals": 6
+        },
+        "quote": {
+          "address": "0x3e064B22aE51213e42A8807677fe35A7A0795B39",
+          "symbol": "eARB",
+          "decimals": 18
+        }
+      },
+      {
+        "id": 3,
+        "base": {
+          "address": "0x5e4c85D072E1B8379A80b39D3B0A000c4d7801Ee",
+          "symbol": "eUSDC",
+          "decimals": 6
+        },
+        "quote": {
+          "address": "0xDd05c0e60E37d699470e45807B1d7A83bec50fb2",
+          "symbol": "eLINK",
+          "decimals": 18
+        }
+      }
+    ]
+  }
+}

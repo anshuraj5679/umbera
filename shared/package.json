@@ -1,0 +1,21 @@
+{
+  "name": "@darkpool/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./auction/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "fast-check": "^3.21.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.0"
+  }
+}
