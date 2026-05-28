@@ -2,7 +2,7 @@ import { getCofheRuntime } from "./permit.js";
 
 const MAX_UNSEAL_ATTEMPTS = 4;
 
-export async function unseal128(_dexAddr: string, _handle: bigint): Promise<bigint> {
+export async function decryptUint128ForView(_dexAddr: string, _handle: bigint): Promise<bigint> {
   const runtime = getCofheRuntime();
   for (let attempt = 1; attempt <= MAX_UNSEAL_ATTEMPTS; attempt++) {
     try {
@@ -17,6 +17,22 @@ export async function unseal128(_dexAddr: string, _handle: bigint): Promise<bigi
   }
   throw new Error("unreachable unseal retry state");
 }
+
+export async function decryptUint128ForTx(_dexAddr: string, _handle: bigint): Promise<{
+  ctHash: bigint | string;
+  decryptedValue: bigint;
+  signature: `0x${string}`;
+}> {
+  const runtime = getCofheRuntime();
+  const result = await runtime.client.decryptForTx(_handle).withPermit().execute();
+  return {
+    ctHash: result.ctHash,
+    decryptedValue: BigInt(result.decryptedValue),
+    signature: result.signature,
+  };
+}
+
+export const unseal128 = decryptUint128ForView;
 
 function isRetryableUnsealError(error: unknown) {
   const anyError = error as { code?: string; context?: { status?: number } };

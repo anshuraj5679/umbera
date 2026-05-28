@@ -34,10 +34,10 @@ export async function matchBatch(
   const decrypted: DecryptedOrder[] = [];
   for (const r of rows) {
     const handles = {
-      baseDeposit: handleValue(r.remainingBaseDeposit, r.encBaseDepositHandle),
-      quoteDeposit: handleValue(r.remainingQuoteDeposit, r.encQuoteDepositHandle),
-      baseRequest: handleValue(r.remainingBaseRequest, r.encBaseRequestHandle),
-      quoteRequest: handleValue(r.remainingQuoteRequest, r.encQuoteRequestHandle),
+      baseDeposit: handleValue(r.encRemainingBaseDepositHandle, r.encBaseDepositHandle),
+      quoteDeposit: handleValue(r.encRemainingQuoteDepositHandle, r.encQuoteDepositHandle),
+      baseRequest: handleValue(r.encRemainingBaseRequestHandle, r.encBaseRequestHandle),
+      quoteRequest: handleValue(r.encRemainingQuoteRequestHandle, r.encQuoteRequestHandle),
     };
     if (!handles.baseDeposit || !handles.quoteDeposit || !handles.baseRequest || !handles.quoteRequest) continue;
 
@@ -57,15 +57,6 @@ export async function matchBatch(
       cashDecimals: decimals.base, assetDecimals: decimals.quote,
     });
     if (order) decrypted.push(order);
-    if (order && r.side !== order.side) {
-      await db.update(ordersTable)
-        .set({ side: order.side })
-        .where(and(
-          eq(ordersTable.chainId, scope.chainId),
-          eq(ordersTable.dexAddress, scope.dexAddress),
-          eq(ordersTable.id, r.id),
-        ));
-    }
   }
   return {
     ...runAuction(decrypted),

@@ -12,7 +12,7 @@ const nextConfig = {
     ];
   },
   async headers() {
-    // SharedArrayBuffer (required by cofhejs WASM) needs cross-origin isolation.
+    // SharedArrayBuffer (required by @cofhe/sdk WASM) needs cross-origin isolation.
     // `credentialless` lets cross-origin resources (RainbowKit icons, etc) still load.
     return [
       {

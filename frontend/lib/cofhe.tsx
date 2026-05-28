@@ -11,6 +11,8 @@ type Ctx = {
   error: string | null;
   encrypt128: (values: bigint[]) => Promise<any[]>;
   unsealUint128: (handle: bigint) => Promise<bigint>;
+  decryptForViewUint128: (handle: bigint) => Promise<bigint>;
+  decryptForTxUint128: (handle: bigint) => Promise<{ ctHash: bigint | string; decryptedValue: bigint; signature: `0x${string}` }>;
 };
 
 const CofheCtx = createContext<Ctx>({
@@ -18,6 +20,8 @@ const CofheCtx = createContext<Ctx>({
   error: null,
   encrypt128: async () => { throw new Error("cofhe not ready"); },
   unsealUint128: async () => { throw new Error("cofhe not ready"); },
+  decryptForViewUint128: async () => { throw new Error("cofhe not ready"); },
+  decryptForTxUint128: async () => { throw new Error("cofhe not ready"); },
 });
 
 function formatError(stage: string, e: any): string {
@@ -64,7 +68,7 @@ export function CofheProvider({ children }: { children: ReactNode }) {
         await client.connect(publicClient as any, walletClient as any);
         console.log("[cofhe] connected", { account: address, chainId: chain?.id });
 
-        // Permit is created lazily by decryptForView; pre-warm so user signs once now
+        // Permit is shared by decryptForView and decryptForTx; pre-warm so users sign once.
         stage = "permit";
         try {
           await client.permits.getOrCreateSelfPermit(chain?.id, address);
@@ -94,14 +98,26 @@ export function CofheProvider({ children }: { children: ReactNode }) {
     return encrypted as any[];
   }, [client]);
 
-  const unsealUint128 = useCallback(async (handle: bigint) => {
+  const decryptForViewUint128 = useCallback(async (handle: bigint) => {
     if (!client) throw new Error("cofhe client not initialized");
     const r = await client.decryptForView(handle, FheTypes.Uint128).execute();
     return BigInt(r as any);
   }, [client]);
 
+  const decryptForTxUint128 = useCallback(async (handle: bigint) => {
+    if (!client) throw new Error("cofhe client not initialized");
+    const r = await client.decryptForTx(handle).withPermit().execute();
+    return {
+      ctHash: r.ctHash,
+      decryptedValue: BigInt(r.decryptedValue),
+      signature: r.signature,
+    };
+  }, [client]);
+
+  const unsealUint128 = decryptForViewUint128;
+
   return (
-    <CofheCtx.Provider value={{ ready, error, encrypt128, unsealUint128 }}>
+    <CofheCtx.Provider value={{ ready, error, encrypt128, unsealUint128, decryptForViewUint128, decryptForTxUint128 }}>
       {children}
     </CofheCtx.Provider>
   );

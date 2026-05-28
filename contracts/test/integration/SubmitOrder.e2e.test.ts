@@ -2,14 +2,14 @@
 //  F3 — Encryption end-to-end smoke
 // ============================================================================
 //
-//  Exercises the real cofhejs.encrypt → submitOrder path against the
+//  Exercises the real @cofhe/sdk encryptInputs → submitOrder path against the
 //  in-process CoFHE mocks deployed by cofhe-hardhat-plugin. This is the
 //  only place the encryption stack is tested under the unit suite — the
 //  B4 hardhat suite stays plaintext-only on purpose (see B4 prompt).
 //
 //  Scope is intentionally narrow: one trader, one pair, one order. The
 //  goal is to catch shape/ABI regressions in:
-//    • cofhejs initialization with a Hardhat signer
+//    • @cofhe/sdk initialization with a Hardhat signer
 //    • Encryptable.uint128 → InEuint128 wire format
 //    • DarkPoolDEX.submitOrder happy path (BUY side)
 //    • FHERC20Wrapper operator+wrap+confidentialTransferFrom plumbing
@@ -20,10 +20,40 @@
 
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
-import { Encryptable, FheTypes } from "cofhejs/node";
+import { Encryptable, FheTypes, MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY } from "@cofhe/sdk";
+import { createPublicClient, createWalletClient, custom, encodePacked, keccak256 } from "viem";
+import { hardhat as viemHardhat } from "viem/chains";
+import { privateKeyToAccount, sign } from "viem/accounts";
 
 // Encryption can take a few seconds the first time the tfhe wasm warms up.
 const ENCRYPT_TIMEOUT_MS = 120_000;
+const HARDHAT_ALICE_PRIVATE_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
+const SDK_LEGACY_MOCK_ZK_VERIFIER = "0x0000000000000000000000000000000000000100";
+const MOCK_ZK_VERIFIER_ABI = [
+  {
+    type: "function",
+    name: "zkVerifyCalcCtHashesPacked",
+    stateMutability: "view",
+    inputs: [
+      { name: "values", type: "uint256[]" },
+      { name: "utypes", type: "uint8[]" },
+      { name: "user", type: "address" },
+      { name: "securityZone", type: "uint8" },
+      { name: "chainId", type: "uint256" },
+    ],
+    outputs: [{ name: "ctHashes", type: "uint256[]" }],
+  },
+  {
+    type: "function",
+    name: "insertPackedCtHashes",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "ctHashes", type: "uint256[]" },
+      { name: "values", type: "uint256[]" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 describe("F3 :: submitOrder end-to-end (encrypted)", function () {
   this.timeout(ENCRYPT_TIMEOUT_MS);
@@ -55,12 +85,6 @@ describe("F3 :: submitOrder end-to-end (encrypted)", function () {
   it("encrypts, escrows, and emits OrderSubmitted for a BUY", async function () {
     const { alice, usdc, eUSDC, eWETH, dex } = await deployStack();
 
-    // ─── Initialize cofhejs bound to Alice's signer ───────────────────────
-    // The plugin's helper wires cofhejs to the mock contracts deployed on
-    // the hardhat network via the `cofhe` extendEnvironment hook.
-    const initRes = await hre.cofhe.initializeWithHardhatSigner(alice);
-    expect(initRes.success, `cofhejs init failed: ${initRes.error?.message ?? "unknown"}`).to.equal(true);
-
     // ─── Fund Alice with plain USDC and wrap into eUSDC ───────────────────
     const oneUSDC = 10n ** 6n;
     const deposit = 100n * oneUSDC; // Alice locks 100 USDC as a buyer
@@ -79,18 +103,16 @@ describe("F3 :: submitOrder end-to-end (encrypted)", function () {
     expect(await eUSDC.isOperator(alice.address, await dex.getAddress())).to.equal(true);
     expect(await eWETH.isOperator(alice.address, await dex.getAddress())).to.equal(true);
 
-    // ─── Encrypt the four private-side legs via cofhejs ───────────────────
+    // ─── Encrypt the four private-side legs via @cofhe/sdk ────────────────
     // Encryptable.uint128 builds the (data, utype, securityZone) tuple that
-    // cofhejs.encrypt then turns into InEuint128 calldata structs the
+    // encryptInputs then turns into InEuint128 calldata structs the
     // DarkPoolDEX entrypoint expects.
-    const encRes = await (await import("cofhejs/node")).cofhejs.encrypt([
-      Encryptable.uint128(deposit),
-      Encryptable.uint128(0n),
-      Encryptable.uint128(0n),
-      Encryptable.uint128(request),
+    const [encBaseDeposit, encQuoteDeposit, encBaseRequest, encQuoteRequest] = await encryptInputsForAlice([
+      deposit,
+      0n,
+      0n,
+      request,
     ]);
-    expect(encRes.success, `cofhejs.encrypt failed: ${encRes.error?.message ?? "unknown"}`).to.equal(true);
-    const [encBaseDeposit, encQuoteDeposit, encBaseRequest, encQuoteRequest] = encRes.data!;
     expect(encBaseDeposit.utype).to.equal(FheTypes.Uint128);
     expect(encQuoteDeposit.utype).to.equal(FheTypes.Uint128);
     expect(encBaseRequest.utype).to.equal(FheTypes.Uint128);
@@ -141,9 +163,6 @@ describe("F3 :: submitOrder end-to-end (encrypted)", function () {
   it("rejects submitOrder when the operator deadline is in the past", async function () {
     const { alice, usdc, eUSDC, dex } = await deployStack();
 
-    const initRes = await hre.cofhe.initializeWithHardhatSigner(alice);
-    expect(initRes.success).to.equal(true);
-
     const oneUSDC = 10n ** 6n;
     const deposit = 50n * oneUSDC;
     const request = 1n * 10n ** 18n;
@@ -157,18 +176,61 @@ describe("F3 :: submitOrder end-to-end (encrypted)", function () {
     await eUSDC.connect(alice).setOperator(await dex.getAddress(), past);
     expect(await eUSDC.isOperator(alice.address, await dex.getAddress())).to.equal(false);
 
-    const { cofhejs } = await import("cofhejs/node");
-    const encRes = await cofhejs.encrypt([
-      Encryptable.uint128(deposit),
-      Encryptable.uint128(0n),
-      Encryptable.uint128(0n),
-      Encryptable.uint128(request),
+    const [encBaseDeposit, encQuoteDeposit, encBaseRequest, encQuoteRequest] = await encryptInputsForAlice([
+      deposit,
+      0n,
+      0n,
+      request,
     ]);
-    expect(encRes.success).to.equal(true);
-    const [encBaseDeposit, encQuoteDeposit, encBaseRequest, encQuoteRequest] = encRes.data!;
 
     await expect(
       dex.connect(alice).submitOrder(0, encBaseDeposit, encQuoteDeposit, encBaseRequest, encQuoteRequest, 0),
     ).to.be.revertedWithCustomError(eUSDC, "InsufficientAllowanceOrOperator");
   });
 });
+
+async function encryptInputsForAlice(values: bigint[]) {
+  const transport = custom(hre.network.provider as any);
+  const publicClient = createPublicClient({ chain: viemHardhat, transport });
+  const aliceAccount = privateKeyToAccount(HARDHAT_ALICE_PRIVATE_KEY);
+  const zkvWalletClient = createWalletClient({
+    chain: viemHardhat,
+    transport,
+    account: privateKeyToAccount(MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY),
+  });
+  const inputs = values.map((value) => Encryptable.uint128(value));
+  const utypes = inputs.map((input) => input.utype);
+  const rawValues = inputs.map((input) => BigInt(input.data));
+  const ctHashes = await publicClient.readContract({
+    address: SDK_LEGACY_MOCK_ZK_VERIFIER,
+    abi: MOCK_ZK_VERIFIER_ABI,
+    functionName: "zkVerifyCalcCtHashesPacked",
+    args: [rawValues, utypes, aliceAccount.address, 0, BigInt(viemHardhat.id)],
+  });
+
+  await zkvWalletClient.writeContract({
+    address: SDK_LEGACY_MOCK_ZK_VERIFIER,
+    abi: MOCK_ZK_VERIFIER_ABI,
+    functionName: "insertPackedCtHashes",
+    args: [ctHashes, rawValues],
+    chain: viemHardhat,
+    account: zkvWalletClient.account!,
+  });
+
+  return Promise.all(ctHashes.map(async (ctHash, index) => {
+    const packed = encodePacked(
+      ["uint256", "uint8", "uint8", "address", "uint256"],
+      [ctHash, utypes[index]!, 0, aliceAccount.address, BigInt(viemHardhat.id)],
+    );
+    return {
+      ctHash,
+      securityZone: 0,
+      utype: FheTypes.Uint128,
+      signature: await sign({
+        hash: keccak256(packed),
+        privateKey: MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY,
+        to: "hex",
+      }),
+    };
+  }));
+}

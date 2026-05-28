@@ -2,6 +2,11 @@
 
 Encrypted batch-auction DEX on Fhenix CoFHE. Arbitrum Sepolia target.
 
+Current privacy posture:
+- Browser and matcher encryption/decryption use `@cofhe/sdk`.
+- `decryptForView` is permit-backed for readable values; `decryptForTx` helpers are wired for transaction-bound decrypt results.
+- The matcher decrypts order legs only in memory for auction execution. The order database stores ciphertext handles and public lifecycle metadata, not plaintext side, size, limit price, or remaining amounts.
+
 See `docs/superpowers/specs/2026-05-16-darkpool-dex-v1-design.md` for design,
 `docs/superpowers/plans/2026-05-16-darkpool-dex-v1.md` for plan,
 `docs/PRODUCT-SPEC.md` for product direction,

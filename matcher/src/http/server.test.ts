@@ -14,12 +14,10 @@ describe("public matcher API redaction", () => {
       encQuoteDepositHandle: "102",
       encBaseRequestHandle: "103",
       encQuoteRequestHandle: "104",
-      plainDeposit: "1000",
-      plainRequest: "1",
-      remainingBaseDeposit: "1000",
-      remainingQuoteDeposit: "0",
-      remainingBaseRequest: "0",
-      remainingQuoteRequest: "1",
+      encRemainingBaseDepositHandle: "101",
+      encRemainingQuoteDepositHandle: "102",
+      encRemainingBaseRequestHandle: "103",
+      encRemainingQuoteRequestHandle: "104",
       createdAt: new Date("2026-05-26T00:00:00.000Z"),
       expiry: 0n,
       submitTxHash: "0xsubmit",
@@ -39,6 +37,7 @@ describe("public matcher API redaction", () => {
     expect("side" in row).toBe(false);
     expect("plainDeposit" in row).toBe(false);
     expect("encBaseDepositHandle" in row).toBe(false);
+    expect("encRemainingBaseDepositHandle" in row).toBe(false);
   });
 
   it("redacts trader address when an account commitment is attached", () => {

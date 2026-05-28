@@ -55,7 +55,7 @@ The product is grant-demo ready only when all of these are true:
 
 | Gap | Why It Matters | Target Fix |
 |---|---|---|
-| Server matcher FHE disabled | Breaks autonomous end-to-end execution | Integrate `@cofhe/sdk/node` or intentionally move v1 matching to browser operator console |
+| Server matcher FHE disabled | Breaks autonomous end-to-end execution | Closed for alpha: matcher and agent order paths use `@cofhe/sdk/node` with permit-backed decrypt/encrypt |
 | Matcher indexing incomplete | Operator cannot rely on backend state | Index `OrderSubmitted`, `BatchClosed`, and match lifecycle events |
 | Partial-fill semantics inconsistent | Real dark pools need multiple fills | Keep orders active while encrypted remaining amounts exist |
 | Testnet wrapper is incomplete | Users need a clear private token lifecycle | Add unwrap or explicitly document v1 as wrap-only demo collateral |
@@ -63,9 +63,17 @@ The product is grant-demo ready only when all of these are true:
 
 ## V1 Trust Model
 
-Obsidian v1 is an optimistic, trusted-matcher prototype. The matcher can see decrypted order amounts after users grant access, computes the auction off-chain, then publishes encrypted settlement amounts. On-chain checks ensure the matcher cannot transfer more than remaining escrow, but v1 does not cryptographically prove price fairness. Disputes are reviewed by admin using signed audit logs.
+Obsidian v1 is an optimistic, trusted-matcher prototype. The matcher can see decrypted order amounts after users grant access, computes the auction off-chain, then publishes encrypted settlement amounts. The matcher keeps decrypted order values in process memory for the auction and does not persist plaintext side, size, limit price, or remaining amounts in the order database; Postgres stores ciphertext handles and public lifecycle metadata. On-chain checks ensure the matcher cannot transfer more than remaining escrow, but v1 does not cryptographically prove price fairness. Disputes are reviewed by admin using signed audit logs.
 
 In the side-private ABI, public chain calldata/events do not include BUY/SELL side. Side is encoded through four encrypted token legs and is visible only to the authorized matcher/operator after decryption. Public observers can still see participation metadata such as trader address, pair id, batch id, tx timing, order ids, and match ids.
+
+## CoFHE SDK Integration
+
+- Browser order entry and balance viewing use `@cofhe/sdk/web`.
+- Matcher daemon, maker/agent order submission, and demo automation use `@cofhe/sdk/node`.
+- `decryptForView` is used for user/operator-readable values that require a self permit.
+- `decryptForTx` helper paths are available for transaction-bound decrypt results with threshold-network signatures.
+- Direct `cofhejs` usage has been removed from app, matcher, and contract integration test code. The contracts package retains `cofhejs` only as the `cofhe-hardhat-plugin` mock peer required for local Hardhat tests.
 
 ## V2 Direction
 
