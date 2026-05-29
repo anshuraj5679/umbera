@@ -168,7 +168,6 @@ export async function indexDexEvent(dex: Contract, db: Db, ev: any, ctx?: IndexC
         status: matchStatusLabel(Number(info.status ?? info[4])),
         publishedAt: new Date(Number(info.publishedAt ?? info[3]) * 1000),
         settledAt: null,
-        auditS3Key: null,
         publishTxHash: ev.transactionHash,
         settleTxHash: null,
       },
