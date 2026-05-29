@@ -36,6 +36,8 @@ New private transcripts include `privateProofSalt`. The salt stays in the privat
 
 ## Phase 2: Canonical Batch Commitments
 
+Status: first public API slice implemented.
+
 Add a canonical batch proof model:
 
 - Batch input root from order commitments.
@@ -44,6 +46,18 @@ Add a canonical batch proof model:
 - Relayer state root after settlement.
 
 The verifier should produce a single batch receipt that links all per-match receipts to one batch state transition.
+
+Current batch receipt API:
+
+- `GET /batches/:id/audit`
+- Returns `receipt.schema = obsidian.batch.proof-receipt.v1`.
+- Aggregates verified per-match receipts into:
+  - `matchReceiptRoot`
+  - `transcriptDigestRoot`
+  - `privateInputRoot`
+  - `outputRoot`
+- Reports `missingAuditMatchIds` and `failedAuditMatchIds` instead of hiding incomplete proof coverage.
+- Still relies on matcher-hosted S3 transcripts until Phase 3 anchors roots on-chain.
 
 ## Phase 3: On-Chain Anchoring
 

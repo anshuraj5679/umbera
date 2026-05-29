@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicAuditVerificationRow, publicMatchRow, publicOrderRow } from "./server.js";
+import { publicAuditVerificationRow, publicBatchAuditVerificationRow, publicMatchRow, publicOrderRow } from "./server.js";
 
 describe("public matcher API redaction", () => {
   it("does not expose private order-side or amount handles", () => {
@@ -164,6 +164,84 @@ describe("public matcher API redaction", () => {
         },
       },
     });
+    expect("bucket" in row).toBe(false);
+    expect("key" in row).toBe(false);
+    expect(JSON.stringify(row)).not.toContain("private input orders");
+    expect(JSON.stringify(row)).not.toContain("remainingDeposit");
+    expect(JSON.stringify(row)).not.toContain("BUY");
+  });
+
+  it("builds a redacted batch proof receipt from match receipts", () => {
+    const row = (publicBatchAuditVerificationRow as any)({
+      batchId: 52n,
+      chainId: 421614,
+      dexAddress: "0x1111111111111111111111111111111111111111",
+      totalMatchCount: 2,
+      missingAuditMatchIds: ["4"],
+      failedAuditMatchIds: [],
+      verifications: [
+        {
+          ok: true,
+          bucket: "private-bucket",
+          key: "pair-0/batch-52/match-3.json",
+          matchId: "3",
+          digest: { ok: true, stored: "stored-digest", recomputed: "computed-digest" },
+          signature: { ok: true, signer: "0xabc", expectedSigner: "0xabc" },
+          fields: { matchId: true, batchId: true },
+          auction: { recomputed: true, ok: true, reason: "contains private input orders" },
+          transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
+          proofReceipt: {
+            schema: "obsidian.match.proof-receipt.v1",
+            matchId: "3",
+            batchId: "52",
+            pairId: 0,
+            chainId: 421614,
+            dexAddress: "0x1111111111111111111111111111111111111111",
+            orderAId: "10",
+            orderBId: "11",
+            publishTxHash: "0xpublish",
+            transcriptDigest: { stored: "stored-digest", recomputed: "computed-digest", ok: true },
+            matcherSignature: { signer: "0xabc", expectedSigner: "0xabc", ok: true },
+            checks: {
+              fieldsOk: true,
+              auctionRecomputed: true,
+              auctionOk: true,
+              transcriptSchema: "match-v2-private-auction-inputs",
+              publishedAt: "2026-05-27T12:17:17.167Z",
+            },
+            commitments: {
+              privateInputRoot: "input-root",
+              privateInputCount: 2,
+              outputRoot: "output-root",
+              outputMatchCount: 1,
+              salted: true,
+            },
+          },
+        },
+      ],
+    });
+
+    expect(row.ok).toBe(false);
+    expect(row.batchId).toBe("52");
+    expect(row.receipt).toMatchObject({
+      schema: "obsidian.batch.proof-receipt.v1",
+      batchId: "52",
+      chainId: 421614,
+      dexAddress: "0x1111111111111111111111111111111111111111",
+      totalMatchCount: 2,
+      auditedMatchCount: 1,
+      missingAuditCount: 1,
+      failedAuditCount: 0,
+      allChecksOk: true,
+      allSalted: true,
+      matchIds: ["3"],
+      missingAuditMatchIds: ["4"],
+      failedAuditMatchIds: [],
+    });
+    expect(row.receipt.roots.matchReceiptRoot).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.receipt.roots.transcriptDigestRoot).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.receipt.roots.privateInputRoot).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.receipt.roots.outputRoot).toMatch(/^[0-9a-f]{64}$/);
     expect("bucket" in row).toBe(false);
     expect("key" in row).toBe(false);
     expect(JSON.stringify(row)).not.toContain("private input orders");

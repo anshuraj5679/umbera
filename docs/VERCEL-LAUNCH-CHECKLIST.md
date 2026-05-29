@@ -28,6 +28,7 @@ GET /health
 GET /markets
 GET /markets/:pairId/candles?interval=5m&limit=200
 GET /batches/recent?limit=20
+GET /batches/:id/audit
 GET /matches/:id
 GET /matches/:id/audit
 GET /orders?batchId=<id>

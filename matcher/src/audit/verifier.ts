@@ -56,6 +56,29 @@ export type AuditProofReceipt = {
   };
 };
 
+export type BatchAuditProofReceipt = {
+  schema: "obsidian.batch.proof-receipt.v1";
+  batchId: string;
+  chainId: number | null;
+  dexAddress: string | null;
+  totalMatchCount: number;
+  auditedMatchCount: number;
+  missingAuditCount: number;
+  failedAuditCount: number;
+  allChecksOk: boolean;
+  allSalted: boolean;
+  matchIds: string[];
+  missingAuditMatchIds: string[];
+  failedAuditMatchIds: string[];
+  roots: {
+    matchReceiptRoot: string | null;
+    transcriptDigestRoot: string | null;
+    privateInputRoot: string | null;
+    outputRoot: string | null;
+  };
+  receipts: AuditProofReceipt[];
+};
+
 export type AuditVerificationResult = {
   ok: boolean;
   bucket: string;
@@ -83,6 +106,84 @@ export type AuditVerificationResult = {
   };
   proofReceipt: AuditProofReceipt;
 };
+
+export function buildBatchProofReceipt(input: {
+  batchId: bigint | string;
+  chainId?: number | null;
+  dexAddress?: string | null;
+  totalMatchCount: number;
+  receipts: AuditProofReceipt[];
+  missingAuditMatchIds?: string[];
+  failedAuditMatchIds?: string[];
+}): BatchAuditProofReceipt {
+  const batchId = input.batchId.toString();
+  const receipts = [...input.receipts].sort(compareReceiptIds);
+  const missingAuditMatchIds = [...(input.missingAuditMatchIds ?? [])].sort(compareNumericStrings);
+  const failedAuditMatchIds = [...(input.failedAuditMatchIds ?? [])].sort(compareNumericStrings);
+  const matchIds = receipts.map((receipt) => receipt.matchId);
+  const allChecksOk = receipts.every((receipt) =>
+    receipt.transcriptDigest.ok
+    && receipt.matcherSignature.ok
+    && receipt.checks.fieldsOk
+    && (receipt.checks.auctionOk ?? true)
+  );
+  const allSalted = receipts.length > 0 && receipts.every((receipt) => receipt.commitments.salted);
+
+  return {
+    schema: "obsidian.batch.proof-receipt.v1",
+    batchId,
+    chainId: input.chainId ?? receipts[0]?.chainId ?? null,
+    dexAddress: input.dexAddress ?? receipts[0]?.dexAddress ?? null,
+    totalMatchCount: input.totalMatchCount,
+    auditedMatchCount: receipts.length,
+    missingAuditCount: missingAuditMatchIds.length,
+    failedAuditCount: failedAuditMatchIds.length,
+    allChecksOk,
+    allSalted,
+    matchIds,
+    missingAuditMatchIds,
+    failedAuditMatchIds,
+    roots: {
+      matchReceiptRoot: receipts.length > 0
+        ? digest({ schema: "obsidian.batch.match-receipt-root.v1", batchId, receipts })
+        : null,
+      transcriptDigestRoot: receipts.length > 0
+        ? digest({
+          schema: "obsidian.batch.transcript-digest-root.v1",
+          batchId,
+          transcriptDigests: receipts.map((receipt) => ({
+            matchId: receipt.matchId,
+            digest: receipt.transcriptDigest.recomputed,
+            ok: receipt.transcriptDigest.ok,
+          })),
+        })
+        : null,
+      privateInputRoot: receipts.length > 0 && receipts.every((receipt) => receipt.commitments.privateInputRoot)
+        ? digest({
+          schema: "obsidian.batch.private-input-root.v1",
+          batchId,
+          privateInputRoots: receipts.map((receipt) => ({
+            matchId: receipt.matchId,
+            root: receipt.commitments.privateInputRoot,
+            count: receipt.commitments.privateInputCount,
+          })),
+        })
+        : null,
+      outputRoot: receipts.length > 0 && receipts.every((receipt) => receipt.commitments.outputRoot)
+        ? digest({
+          schema: "obsidian.batch.output-root.v1",
+          batchId,
+          outputRoots: receipts.map((receipt) => ({
+            matchId: receipt.matchId,
+            root: receipt.commitments.outputRoot,
+            count: receipt.commitments.outputMatchCount,
+          })),
+        })
+        : null,
+    },
+    receipts,
+  };
+}
 
 export class AuditVerificationError extends Error {
   readonly statusCode: number;
@@ -369,6 +470,17 @@ function proofCommitments(transcript: Record<string, unknown>, match: AuditMatch
 
 function isCommitmentSalt(value: string | null): value is string {
   return typeof value === "string" && /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function compareReceiptIds(a: AuditProofReceipt, b: AuditProofReceipt) {
+  return compareNumericStrings(a.matchId, b.matchId);
+}
+
+function compareNumericStrings(a: string, b: string) {
+  const left = /^\d+$/.test(a) ? BigInt(a) : null;
+  const right = /^\d+$/.test(b) ? BigInt(b) : null;
+  if (left !== null && right !== null) return left < right ? -1 : left > right ? 1 : 0;
+  return a.localeCompare(b);
 }
 
 function omit(source: Record<string, unknown>, keys: string[]) {

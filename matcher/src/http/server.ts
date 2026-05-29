@@ -25,7 +25,12 @@ import {
 } from "../accounts/session.js";
 import { buildCandles, parseCandleInterval, parseCandleLimit } from "../markets/candles.js";
 import { getDeployment } from "../../../shared/addresses/index.js";
-import { verifyAuditTranscriptFromS3, type AuditVerificationError } from "../audit/verifier.js";
+import {
+  buildBatchProofReceipt,
+  verifyAuditTranscriptFromS3,
+  type AuditVerificationError,
+  type AuditVerificationResult,
+} from "../audit/verifier.js";
 import { latestRelayerCheckpoint } from "../relayer/commitments.js";
 import {
   agentOrderIdempotencyKey,
@@ -162,6 +167,61 @@ export function startHttp(
       };
     }));
     res.json({ batches });
+  });
+  app.get("/batches/:id/audit", async (req, res) => {
+    const batchId = parseBigIntParam(req.params.id);
+    if (batchId === null) return res.status(400).json({ error: "invalid batch id", code: "invalid_batch_id" });
+    if (!httpCtx?.auditBucket) {
+      return res.status(503).json({ error: "audit verifier is not configured", code: "audit_verifier_unconfigured" });
+    }
+    const batch = await db.select().from(batchesTable).where(scopedIdWhere(batchesTable, httpCtx, batchId)).limit(1).then((rs: any[]) => rs[0]);
+    if (!batch) return res.status(404).json({ error: "batch not found", code: "batch_not_found" });
+    const rows = await db.select()
+      .from(matchesTable)
+      .where(withScope(matchesTable, httpCtx, eq(matchesTable.batchId, batchId)))
+      .orderBy(matchesTable.id);
+    if (rows.length === 0) {
+      return res.json(publicBatchAuditVerificationRow({
+        batchId,
+        chainId: httpCtx.chainId,
+        dexAddress: httpCtx.dexAddress,
+        totalMatchCount: 0,
+        verifications: [],
+        missingAuditMatchIds: [],
+        failedAuditMatchIds: [],
+      }));
+    }
+
+    const verifications: AuditVerificationResult[] = [];
+    const missingAuditMatchIds: string[] = [];
+    const failedAuditMatchIds: string[] = [];
+    for (const match of rows) {
+      const matchId = match.id.toString();
+      if (!match.auditS3Key) {
+        missingAuditMatchIds.push(matchId);
+        continue;
+      }
+      try {
+        verifications.push(await verifyAuditTranscriptFromS3({
+          bucket: httpCtx.auditBucket,
+          key: match.auditS3Key,
+          match,
+          matcherAddress,
+        }));
+      } catch {
+        failedAuditMatchIds.push(matchId);
+      }
+    }
+
+    res.json(publicBatchAuditVerificationRow({
+      batchId,
+      chainId: httpCtx.chainId,
+      dexAddress: httpCtx.dexAddress,
+      totalMatchCount: rows.length,
+      verifications,
+      missingAuditMatchIds,
+      failedAuditMatchIds,
+    }));
   });
   app.get("/tasks/recent", async (req, res) => {
     const limit = parsePositiveInteger(req.query.limit, 20, 100);
@@ -634,6 +694,31 @@ export function publicAuditVerificationRow(verification: Awaited<ReturnType<type
     auctionRecomputed: verification.auction.recomputed,
     transcript: verification.transcript,
     receipt: verification.proofReceipt,
+  };
+}
+
+export function publicBatchAuditVerificationRow(input: {
+  batchId: bigint | string;
+  chainId?: number | null;
+  dexAddress?: string | null;
+  totalMatchCount: number;
+  verifications: AuditVerificationResult[];
+  missingAuditMatchIds?: string[];
+  failedAuditMatchIds?: string[];
+}) {
+  const receipt = buildBatchProofReceipt({
+    batchId: input.batchId,
+    chainId: input.chainId,
+    dexAddress: input.dexAddress,
+    totalMatchCount: input.totalMatchCount,
+    receipts: input.verifications.map((verification) => verification.proofReceipt),
+    missingAuditMatchIds: input.missingAuditMatchIds,
+    failedAuditMatchIds: input.failedAuditMatchIds,
+  });
+  return {
+    ok: receipt.allChecksOk && receipt.missingAuditCount === 0 && receipt.failedAuditCount === 0,
+    batchId: receipt.batchId,
+    receipt,
   };
 }
 
