@@ -69,7 +69,7 @@ The product is shaped around the hardest parts of confidential execution:
 - Auditability without disclosure: receipts prove transcript integrity, matcher signature validity, auction recomputation, and salted input/output roots.
 - Deployed review surface: judges and users can test the product from Vercel instead of relying on local scripts.
 - Agent-native access: automated agents can pay for access separately from encrypted trading settlement.
-- Production path: the architecture is moving toward proof-backed settlement, reorg-safe indexing, relayer state, account commitments, and multi-matcher execution.
+- Production-grade backend: reorg-aware indexing, retry workers, relayer state, account commitments, and public proof receipts.
 
 ## Live Proof Surface
 
@@ -99,7 +99,7 @@ V1 trust model:
 - Obsidian V1 uses a trusted matcher.
 - Order values are hidden publicly, but the authorized matcher decrypts for auction execution.
 - Audit transcripts and proof receipts verify what the matcher did.
-- V2 direction includes stronger proof-backed settlement, root anchoring, and multi-matcher or threshold execution.
+- This alpha does not claim decentralized matching or ZK fairness proofs.
 
 ## System Map
 
@@ -117,18 +117,8 @@ shared/
   Auction logic, pricing, commitment helpers, deployed addresses
 
 docs/
-  Product spec, proof roadmap, launch checklist, runbook, architecture plans
+  Operator runbook, agent API docs, README assets
 ```
-
-## Road To Production Privacy
-
-The next protocol work is focused on reducing V1 trust while preserving the same clean product surface:
-
-- Anchor batch proof roots on-chain.
-- Add proof adapters for fraud-proof or ZK-backed auction verification.
-- Harden reorg-safe indexing and settlement repair loops.
-- Expand account commitments so wallet identity is not the default public coordination layer.
-- Move from one trusted matcher toward multi-matcher or threshold execution.
 
 ## Local Development
 
@@ -174,10 +164,5 @@ Current deployed proof slice has been verified with:
 
 ## Docs
 
-- [Product Spec](docs/PRODUCT-SPEC.md)
-- [Proof Moat Protocol Plan](docs/PROOF-MOAT-PROTOCOL-PLAN.md)
-- [Vercel Launch Checklist](docs/VERCEL-LAUNCH-CHECKLIST.md)
-- [relayer-Level Upgrade Plan](docs/relayer-LEVEL-UPGRADE-PLAN.md)
-- [Production 80 Roadmap](docs/PRODUCTION-80-ROADMAP.md)
 - [Agent API](docs/X402-AGENT-API.md)
 - [Runbook](docs/RUNBOOK.md)
