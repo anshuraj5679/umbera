@@ -61,14 +61,23 @@ Current batch receipt API:
 
 ## Phase 3: On-Chain Anchoring
 
-Upgrade contracts to emit or store:
+Status: implementation slice added for the next DEX redeploy.
 
-- Batch input root at close.
-- Output root at match publication.
+The next contract version includes matcher-only batch proof anchoring:
+
+- `anchorBatchProof(batchId, matchReceiptRoot, transcriptDigestRoot, privateInputRoot, outputRoot, matchCount, allSalted)`.
+- `batchProofAnchors(batchId)` stores the roots, match count, salted coverage flag, and anchor timestamp.
+- `BatchProofAnchored` emits the same public roots for indexers.
+- The matcher projection stores the anchor tx hash and compares anchored roots against `GET /batches/:id/audit`.
+- `MATCHER_ANCHOR_BATCH_PROOFS=false` remains the default until a DEX with `anchorBatchProof` is deployed.
+
+This lets public receipts compare against on-chain commitments instead of relying only on matcher-hosted API output. The roots still do not reveal private order side, size, limit price, remaining amount, private salts, or raw transcripts.
+
+Still pending for stronger Phase 3:
+
+- Batch input root at close from account/order commitments.
 - Settlement root after dispute window.
 - Verifier/proof adapter address for future proof systems.
-
-This lets public receipts compare against on-chain commitments instead of relying only on matcher-hosted API output.
 
 ## Phase 4: Proof Adapter
 

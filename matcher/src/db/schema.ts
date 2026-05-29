@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, bigserial, bigint, text, timestamp, integer, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, bigserial, bigint, text, timestamp, integer, jsonb, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 
 export const batches = pgTable("batches", {
   chainId: integer("chain_id").notNull(),
@@ -10,6 +10,14 @@ export const batches = pgTable("batches", {
   settledAt: timestamp("settled_at"),
   status: text("status").notNull().default("OPEN"),
   closeTxHash: text("close_tx_hash"),
+  proofMatchReceiptRoot: text("proof_match_receipt_root"),
+  proofTranscriptDigestRoot: text("proof_transcript_digest_root"),
+  proofPrivateInputRoot: text("proof_private_input_root"),
+  proofOutputRoot: text("proof_output_root"),
+  proofMatchCount: integer("proof_match_count"),
+  proofAllSalted: boolean("proof_all_salted"),
+  proofAnchoredAt: timestamp("proof_anchored_at"),
+  proofAnchorTxHash: text("proof_anchor_tx_hash"),
 }, (table) => ({
   scopedIdUnique: uniqueIndex("batches_scope_id_unique").on(table.chainId, table.dexAddress, table.id),
 }));

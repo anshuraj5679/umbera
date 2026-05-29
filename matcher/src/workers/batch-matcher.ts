@@ -5,6 +5,7 @@ import { matchBatch } from "../matching/runner.js";
 import { encryptUint128 } from "../matching/encode.js";
 import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
 import { writeAuditLog } from "../audit/s3.js";
+import { anchorBatchProof } from "../audit/batch.js";
 import { and, asc, eq, sql } from "drizzle-orm";
 import cron from "node-cron";
 import { runTask } from "../tasks/store.js";
@@ -18,6 +19,13 @@ export type BatchMatcherOptions = {
   matchDelaySec?: number;
   bypassDelay?: boolean;
   now?: () => Date;
+};
+
+export type BatchMatcherAuditContext = {
+  bucket: string;
+  matcherAddress: string;
+  signMessage: (msg: string) => Promise<string>;
+  anchorProofs?: boolean;
 };
 
 export type BatchReadiness =
@@ -63,7 +71,7 @@ export async function onBatchClosed(
   db: Db,
   batchId: bigint,
   pairs: Array<{ id: number; base: { decimals: number }; quote: { decimals: number } }>,
-  auditCtx: { bucket: string; matcherAddress: string; signMessage: (msg: string) => Promise<string> },
+  auditCtx: BatchMatcherAuditContext,
   options: BatchMatcherOptions = {}
 ): Promise<BatchMatchOutcome> {
   const scope = matcherScope(dexAddr, options);
@@ -226,6 +234,26 @@ export async function onBatchClosed(
       await db.update(batchesTable)
         .set({ status: nextStatus })
         .where(scopedIdWhere(batchesTable, scope, batchId));
+      if (auditCtx.anchorProofs && nextStatus === "MATCHED") {
+        try {
+          const anchor = await anchorBatchProof({
+            dex,
+            db,
+            batchId,
+            chainId: scope.chainId,
+            dexAddress: scope.dexAddress,
+            auditBucket: auditCtx.bucket,
+            matcherAddress: auditCtx.matcherAddress,
+          });
+          console.log("batch proof anchored", batchKey, anchor.txHash);
+        } catch (e) {
+          console.error("batch proof anchor failed", batchKey, e);
+          await recordWorkerError(db, "batch-proof-anchor", {
+            batchId: batchKey,
+            error: errorMessage(e),
+          });
+        }
+      }
       console.log("batch matched", batchKey, "published", published, "existingPairs", existingPairs, "failedPairs", failedPairs);
       return {
         status: nextStatus,
@@ -257,7 +285,7 @@ export async function matchClosedBatches(
   dexAddr: string,
   db: Db,
   pairs: Array<{ id: number; base: { decimals: number }; quote: { decimals: number } }>,
-  auditCtx: { bucket: string; matcherAddress: string; signMessage: (msg: string) => Promise<string> },
+  auditCtx: BatchMatcherAuditContext,
   limit = 5,
   options: BatchMatcherOptions = {}
 ) {
@@ -286,7 +314,7 @@ export function startBatchMatcher(
   dexAddr: string,
   db: Db,
   pairs: Array<{ id: number; base: { decimals: number }; quote: { decimals: number } }>,
-  auditCtx: { bucket: string; matcherAddress: string; signMessage: (msg: string) => Promise<string> },
+  auditCtx: BatchMatcherAuditContext,
   options: BatchMatcherOptions = {}
 ) {
   let running = false;

@@ -56,6 +56,7 @@ async function main() {
     bucket: cfg.S3_BUCKET,
     matcherAddress: chain.wallet.address,
     signMessage: (msg: string) => chain.wallet.signMessage(msg),
+    anchorProofs: cfg.MATCHER_ANCHOR_BATCH_PROOFS,
   };
   const batchMatcherOptions = {
     chainId: cfg.chainId,
@@ -99,6 +100,7 @@ async function main() {
     OrderSubmitted: indexEvent,
     OrderSubmittedPrivate: indexEvent,
     BatchClosed: indexAndMatchClosedBatch,
+    BatchProofAnchored: indexEvent,
     MatchPublished: indexEvent,
     MatchDisputed: indexEvent,
     MatchSettled: indexEvent,

@@ -30,6 +30,98 @@ describe("DarkPoolDEX (plaintext paths)", () => {
       const { dex } = await loadFixture(deployDexFixture);
       await expect(dex.closeBatch()).to.be.revertedWithCustomError(dex, "BatchStillOpen");
     });
+
+    it("anchorBatchProof_stores_roots_for_closed_batch", async () => {
+      const { dex, matcher } = await loadFixture(deployDexFixture);
+      const matchReceiptRoot = ethers.keccak256(ethers.toUtf8Bytes("match-root"));
+      const transcriptDigestRoot = ethers.keccak256(ethers.toUtf8Bytes("transcript-root"));
+      const privateInputRoot = ethers.keccak256(ethers.toUtf8Bytes("input-root"));
+      const outputRoot = ethers.keccak256(ethers.toUtf8Bytes("output-root"));
+
+      await time.increase(5 * 60 + 1);
+      await dex.closeBatch();
+
+      await expect(dex.connect(matcher).anchorBatchProof(
+        0,
+        matchReceiptRoot,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        2,
+        true,
+      )).to.emit(dex, "BatchProofAnchored")
+        .withArgs(0, matchReceiptRoot, transcriptDigestRoot, privateInputRoot, outputRoot, 2, true);
+
+      const anchor = await dex.batchProofAnchors(0);
+      expect(anchor.matchReceiptRoot).to.equal(matchReceiptRoot);
+      expect(anchor.transcriptDigestRoot).to.equal(transcriptDigestRoot);
+      expect(anchor.privateInputRoot).to.equal(privateInputRoot);
+      expect(anchor.outputRoot).to.equal(outputRoot);
+      expect(anchor.matchCount).to.equal(2n);
+      expect(anchor.anchoredAt).to.be.gt(0n);
+      expect(anchor.allSalted).to.equal(true);
+    });
+
+    it("anchorBatchProof_rejects_open_batch_non_matcher_zero_roots_and_duplicates", async () => {
+      const { dex, matcher, alice } = await loadFixture(deployDexFixture);
+      const matchReceiptRoot = ethers.keccak256(ethers.toUtf8Bytes("match-root"));
+      const transcriptDigestRoot = ethers.keccak256(ethers.toUtf8Bytes("transcript-root"));
+      const privateInputRoot = ethers.keccak256(ethers.toUtf8Bytes("input-root"));
+      const outputRoot = ethers.keccak256(ethers.toUtf8Bytes("output-root"));
+
+      await expect(dex.connect(matcher).anchorBatchProof(
+        0,
+        matchReceiptRoot,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        1,
+        true,
+      )).to.be.revertedWithCustomError(dex, "BatchStillOpen");
+
+      await time.increase(5 * 60 + 1);
+      await dex.closeBatch();
+
+      await expect(dex.connect(alice).anchorBatchProof(
+        0,
+        matchReceiptRoot,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        1,
+        true,
+      )).to.be.revertedWithCustomError(dex, "Unauthorized");
+
+      await expect(dex.connect(matcher).anchorBatchProof(
+        0,
+        ethers.ZeroHash,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        1,
+        true,
+      )).to.be.revertedWithCustomError(dex, "InvalidProofRoot");
+
+      await dex.connect(matcher).anchorBatchProof(
+        0,
+        matchReceiptRoot,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        1,
+        true,
+      );
+
+      await expect(dex.connect(matcher).anchorBatchProof(
+        0,
+        matchReceiptRoot,
+        transcriptDigestRoot,
+        privateInputRoot,
+        outputRoot,
+        1,
+        true,
+      )).to.be.revertedWithCustomError(dex, "BatchProofAlreadyAnchored");
+    });
   });
 
   describe("access control matrix", () => {

@@ -180,6 +180,24 @@ contract DarkPoolDEX {
         bool    settled;              // true once ALL matches in batch are settled
     }
 
+    /**
+     * @notice Public commitment anchor for a verified batch transcript.
+     *
+     *  The roots commit to public proof receipts and salted private evidence,
+     *  not to raw decrypted order values. Private salts and transcripts stay
+     *  off-chain; this anchor lets a public verifier compare the API receipt
+     *  against immutable chain state.
+     */
+    struct BatchProofAnchor {
+        bytes32 matchReceiptRoot;
+        bytes32 transcriptDigestRoot;
+        bytes32 privateInputRoot;
+        bytes32 outputRoot;
+        uint256 matchCount;
+        uint256 anchoredAt;
+        bool    allSalted;
+    }
+
     // ========================================================================
     //  STATE
     // ========================================================================
@@ -209,6 +227,7 @@ contract DarkPoolDEX {
     mapping(uint256 => EncryptedOrder) internal _orders;
     mapping(uint256 => Match)          internal _matches;
     mapping(uint256 => Batch)          public   batches;
+    mapping(uint256 => BatchProofAnchor) public batchProofAnchors;
     mapping(bytes32 => bool)           public   accountRegistered;
     mapping(bytes32 => mapping(address => bool)) public sessionAuthorized;
 
@@ -265,6 +284,15 @@ contract DarkPoolDEX {
     event MatchDisputed(uint256 indexed matchId, address indexed disputor);
     event MatchSettled(uint256 indexed matchId);
     event MatchVoided(uint256 indexed matchId);
+    event BatchProofAnchored(
+        uint256 indexed batchId,
+        bytes32 matchReceiptRoot,
+        bytes32 transcriptDigestRoot,
+        bytes32 privateInputRoot,
+        bytes32 outputRoot,
+        uint256 matchCount,
+        bool allSalted
+    );
 
     event Paused(address indexed by);
     event Unpaused(address indexed by);
@@ -305,6 +333,8 @@ contract DarkPoolDEX {
     error TransferFailed();
     error InvalidAccountCommitment();
     error SessionNotAuthorized();
+    error InvalidProofRoot();
+    error BatchProofAlreadyAnchored();
 
     // ========================================================================
     //  MODIFIERS
@@ -471,6 +501,52 @@ contract DarkPoolDEX {
             settled:   false
         });
         emit BatchOpened(currentBatchId, block.timestamp);
+    }
+
+    /**
+     * @notice Anchor public proof roots for a closed batch.
+     * @dev Only the matcher can anchor in V1. Future versions can route this
+     *      through a proof adapter or threshold matcher committee.
+     */
+    function anchorBatchProof(
+        uint256 batchId,
+        bytes32 matchReceiptRoot,
+        bytes32 transcriptDigestRoot,
+        bytes32 privateInputRoot,
+        bytes32 outputRoot,
+        uint256 matchCount,
+        bool allSalted
+    ) external onlyMatcher whenNotPaused {
+        Batch storage batch = batches[batchId];
+        if (batch.closedAt == 0) revert BatchStillOpen();
+        if (batchProofAnchors[batchId].anchoredAt != 0) revert BatchProofAlreadyAnchored();
+        if (
+            matchCount == 0 ||
+            matchReceiptRoot == bytes32(0) ||
+            transcriptDigestRoot == bytes32(0) ||
+            privateInputRoot == bytes32(0) ||
+            outputRoot == bytes32(0)
+        ) revert InvalidProofRoot();
+
+        batchProofAnchors[batchId] = BatchProofAnchor({
+            matchReceiptRoot: matchReceiptRoot,
+            transcriptDigestRoot: transcriptDigestRoot,
+            privateInputRoot: privateInputRoot,
+            outputRoot: outputRoot,
+            matchCount: matchCount,
+            anchoredAt: block.timestamp,
+            allSalted: allSalted
+        });
+
+        emit BatchProofAnchored(
+            batchId,
+            matchReceiptRoot,
+            transcriptDigestRoot,
+            privateInputRoot,
+            outputRoot,
+            matchCount,
+            allSalted
+        );
     }
 
     // ========================================================================

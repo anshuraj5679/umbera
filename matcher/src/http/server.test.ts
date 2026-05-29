@@ -248,4 +248,74 @@ describe("public matcher API redaction", () => {
     expect(JSON.stringify(row)).not.toContain("remainingDeposit");
     expect(JSON.stringify(row)).not.toContain("BUY");
   });
+
+  it("compares batch proof receipts against on-chain anchors", () => {
+    const baseInput = {
+      batchId: 52n,
+      chainId: 421614,
+      dexAddress: "0x1111111111111111111111111111111111111111",
+      totalMatchCount: 1,
+      missingAuditMatchIds: [],
+      failedAuditMatchIds: [],
+      verifications: [
+        {
+          ok: true,
+          bucket: "private-bucket",
+          key: "pair-0/batch-52/match-3.json",
+          matchId: "3",
+          digest: { ok: true, stored: "stored-digest", recomputed: "computed-digest" },
+          signature: { ok: true, signer: "0xabc", expectedSigner: "0xabc" },
+          fields: { matchId: true, batchId: true },
+          auction: { recomputed: true, ok: true, reason: "contains private input orders" },
+          transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
+          proofReceipt: {
+            schema: "obsidian.match.proof-receipt.v1",
+            matchId: "3",
+            batchId: "52",
+            pairId: 0,
+            chainId: 421614,
+            dexAddress: "0x1111111111111111111111111111111111111111",
+            orderAId: "10",
+            orderBId: "11",
+            publishTxHash: "0xpublish",
+            transcriptDigest: { stored: "stored-digest", recomputed: "computed-digest", ok: true },
+            matcherSignature: { signer: "0xabc", expectedSigner: "0xabc", ok: true },
+            checks: {
+              fieldsOk: true,
+              auctionRecomputed: true,
+              auctionOk: true,
+              transcriptSchema: "match-v2-private-auction-inputs",
+              publishedAt: "2026-05-27T12:17:17.167Z",
+            },
+            commitments: {
+              privateInputRoot: "input-root",
+              privateInputCount: 2,
+              outputRoot: "output-root",
+              outputMatchCount: 1,
+              salted: true,
+            },
+          },
+        },
+      ],
+    };
+    const unanchored = (publicBatchAuditVerificationRow as any)(baseInput);
+    const anchored = (publicBatchAuditVerificationRow as any)({
+      ...baseInput,
+      anchor: {
+        matchReceiptRoot: `0x${unanchored.receipt.roots.matchReceiptRoot}`,
+        transcriptDigestRoot: `0x${unanchored.receipt.roots.transcriptDigestRoot}`,
+        privateInputRoot: `0x${unanchored.receipt.roots.privateInputRoot}`,
+        outputRoot: `0x${unanchored.receipt.roots.outputRoot}`,
+        matchCount: 1,
+        allSalted: true,
+        anchoredAt: "2026-05-29T00:00:00.000Z",
+        txHash: "0xanchor",
+      },
+    });
+
+    expect(unanchored.anchored.ok).toBe(false);
+    expect(anchored.anchored.ok).toBe(true);
+    expect(JSON.stringify(anchored)).not.toContain("private-bucket");
+    expect(JSON.stringify(anchored)).not.toContain("pair-0/batch-52");
+  });
 });

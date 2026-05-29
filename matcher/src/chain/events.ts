@@ -176,6 +176,23 @@ export async function indexDexEvent(dex: Contract, db: Db, ev: any, ctx?: IndexC
     return;
   }
 
+  if (name === "BatchProofAnchored") {
+    const batchId = BigInt(args.batchId);
+    await db.update(batches)
+      .set({
+        proofMatchReceiptRoot: normalizeBytes32(args.matchReceiptRoot),
+        proofTranscriptDigestRoot: normalizeBytes32(args.transcriptDigestRoot),
+        proofPrivateInputRoot: normalizeBytes32(args.privateInputRoot),
+        proofOutputRoot: normalizeBytes32(args.outputRoot),
+        proofMatchCount: Number(args.matchCount ?? 0),
+        proofAllSalted: Boolean(args.allSalted),
+        proofAnchoredAt: await eventTimestamp(ev),
+        proofAnchorTxHash: ev.transactionHash,
+      })
+      .where(scopedIdWhere(batches, scope, batchId));
+    return;
+  }
+
   if (name === "MatchDisputed") {
     await db.update(matches)
       .set({ status: "DISPUTED" })
@@ -230,4 +247,20 @@ function normalizeAccountCommitment(value: string | null): string | null {
   if (!value || !/^0x[0-9a-fA-F]{64}$/.test(value)) return null;
   const normalized = value.toLowerCase();
   return /^0x0{64}$/.test(normalized) ? null : normalized;
+}
+
+function normalizeBytes32(value: unknown): string | null {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) return null;
+  return value.toLowerCase();
+}
+
+async function eventTimestamp(ev: any): Promise<Date> {
+  try {
+    const block = typeof ev.getBlock === "function" ? await ev.getBlock() : null;
+    const timestamp = Number(block?.timestamp ?? 0);
+    if (timestamp > 0) return new Date(timestamp * 1000);
+  } catch {
+    // Fall back to local indexing time if the provider cannot hydrate the block.
+  }
+  return new Date();
 }

@@ -161,6 +161,7 @@ export function startHttp(
         closedAt: row.closedAt?.toISOString() ?? null,
         settledAt: row.settledAt?.toISOString() ?? null,
         closeTxHash: row.closeTxHash,
+        proofAnchor: publicBatchProofAnchor(row),
         indexedOrderCount: indexedOrders.toString(),
         onChainOrderCount: onChainOrders?.toString() ?? null,
         matchCount: matchCount.toString(),
@@ -221,6 +222,7 @@ export function startHttp(
       verifications,
       missingAuditMatchIds,
       failedAuditMatchIds,
+      anchor: publicBatchProofAnchor(batch),
     }));
   });
   app.get("/tasks/recent", async (req, res) => {
@@ -705,6 +707,7 @@ export function publicBatchAuditVerificationRow(input: {
   verifications: AuditVerificationResult[];
   missingAuditMatchIds?: string[];
   failedAuditMatchIds?: string[];
+  anchor?: ReturnType<typeof publicBatchProofAnchor>;
 }) {
   const receipt = buildBatchProofReceipt({
     batchId: input.batchId,
@@ -719,7 +722,38 @@ export function publicBatchAuditVerificationRow(input: {
     ok: receipt.allChecksOk && receipt.missingAuditCount === 0 && receipt.failedAuditCount === 0,
     batchId: receipt.batchId,
     receipt,
+    anchor: input.anchor ?? null,
+    anchored: input.anchor
+      ? {
+        ok:
+          input.anchor.matchReceiptRoot === asRootHex(receipt.roots.matchReceiptRoot)
+          && input.anchor.transcriptDigestRoot === asRootHex(receipt.roots.transcriptDigestRoot)
+          && input.anchor.privateInputRoot === asRootHex(receipt.roots.privateInputRoot)
+          && input.anchor.outputRoot === asRootHex(receipt.roots.outputRoot)
+          && input.anchor.matchCount === receipt.auditedMatchCount
+          && input.anchor.allSalted === receipt.allSalted,
+      }
+      : { ok: false },
   };
+}
+
+export function publicBatchProofAnchor(row: any) {
+  if (!row?.proofAnchoredAt) return null;
+  return {
+    matchReceiptRoot: row.proofMatchReceiptRoot,
+    transcriptDigestRoot: row.proofTranscriptDigestRoot,
+    privateInputRoot: row.proofPrivateInputRoot,
+    outputRoot: row.proofOutputRoot,
+    matchCount: Number(row.proofMatchCount ?? 0),
+    allSalted: Boolean(row.proofAllSalted),
+    anchoredAt: row.proofAnchoredAt.toISOString(),
+    txHash: row.proofAnchorTxHash,
+  };
+}
+
+function asRootHex(root: string | null): string | null {
+  if (!root) return null;
+  return root.startsWith("0x") ? root.toLowerCase() : `0x${root.toLowerCase()}`;
 }
 
 function publicRelayerCheckpointRow(row: {

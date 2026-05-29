@@ -64,6 +64,13 @@
       "when": 1779912000000,
       "tag": "0008_private_order_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779915600000,
+      "tag": "0009_batch_proof_anchors",
+      "breakpoints": true
     }
   ]
 }
