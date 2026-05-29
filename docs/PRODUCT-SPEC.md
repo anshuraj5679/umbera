@@ -77,6 +77,7 @@ In the side-private ABI, public chain calldata/events do not include BUY/SELL si
 
 ## V2 Direction
 
+- Public proof receipts for each match that expose signed verifier status, neutral identifiers, tx links, and salted commitment roots without revealing decrypted auction inputs.
 - Solver competition or multi-matcher committees.
 - Signed auction transcript with public verifier.
 - Fraud proof or ZK proof for clearing-price fairness.

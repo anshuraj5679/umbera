@@ -1,4 +1,5 @@
 import type { Contract } from "ethers";
+import { randomBytes } from "node:crypto";
 import type { Db } from "../db/client.js";
 import { matchBatch } from "../matching/runner.js";
 import { encryptUint128 } from "../matching/encode.js";
@@ -151,6 +152,7 @@ export async function onBatchClosed(
           try {
             await writeAuditLog(auditCtx.bucket, auditKey, {
               schema: "match-v2-private-auction-inputs",
+              privateProofSalt: randomBytes(32).toString("hex"),
               matchId: matchId.toString(),
               batchId: batchId.toString(),
               pairId: p.id,

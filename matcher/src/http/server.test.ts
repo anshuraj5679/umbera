@@ -98,6 +98,33 @@ describe("public matcher API redaction", () => {
       fields: { matchId: true, batchId: true },
       auction: { recomputed: true, ok: true, reason: "contains private input orders" },
       transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
+      proofReceipt: {
+        schema: "obsidian.match.proof-receipt.v1",
+        matchId: "3",
+        batchId: "52",
+        pairId: 0,
+        chainId: 421614,
+        dexAddress: "0x1111111111111111111111111111111111111111",
+        orderAId: "10",
+        orderBId: "11",
+        publishTxHash: "0xpublish",
+        transcriptDigest: { stored: "stored-digest", recomputed: "computed-digest", ok: true },
+        matcherSignature: { signer: "0xabc", expectedSigner: "0xabc", ok: true },
+        checks: {
+          fieldsOk: true,
+          auctionRecomputed: true,
+          auctionOk: true,
+          transcriptSchema: "match-v2-private-auction-inputs",
+          publishedAt: "2026-05-27T12:17:17.167Z",
+        },
+        commitments: {
+          privateInputRoot: "input-root",
+          privateInputCount: 2,
+          outputRoot: "output-root",
+          outputMatchCount: 1,
+          salted: true,
+        },
+      },
     });
 
     expect(row).toEqual({
@@ -109,10 +136,38 @@ describe("public matcher API redaction", () => {
       auctionOk: true,
       auctionRecomputed: true,
       transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
+      receipt: {
+        schema: "obsidian.match.proof-receipt.v1",
+        matchId: "3",
+        batchId: "52",
+        pairId: 0,
+        chainId: 421614,
+        dexAddress: "0x1111111111111111111111111111111111111111",
+        orderAId: "10",
+        orderBId: "11",
+        publishTxHash: "0xpublish",
+        transcriptDigest: { stored: "stored-digest", recomputed: "computed-digest", ok: true },
+        matcherSignature: { signer: "0xabc", expectedSigner: "0xabc", ok: true },
+        checks: {
+          fieldsOk: true,
+          auctionRecomputed: true,
+          auctionOk: true,
+          transcriptSchema: "match-v2-private-auction-inputs",
+          publishedAt: "2026-05-27T12:17:17.167Z",
+        },
+        commitments: {
+          privateInputRoot: "input-root",
+          privateInputCount: 2,
+          outputRoot: "output-root",
+          outputMatchCount: 1,
+          salted: true,
+        },
+      },
     });
     expect("bucket" in row).toBe(false);
     expect("key" in row).toBe(false);
-    expect(JSON.stringify(row)).not.toContain("stored-digest");
     expect(JSON.stringify(row)).not.toContain("private input orders");
+    expect(JSON.stringify(row)).not.toContain("remainingDeposit");
+    expect(JSON.stringify(row)).not.toContain("BUY");
   });
 });

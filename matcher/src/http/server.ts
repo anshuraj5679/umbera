@@ -633,6 +633,7 @@ export function publicAuditVerificationRow(verification: Awaited<ReturnType<type
     auctionOk: verification.auction.ok,
     auctionRecomputed: verification.auction.recomputed,
     transcript: verification.transcript,
+    receipt: verification.proofReceipt,
   };
 }
 

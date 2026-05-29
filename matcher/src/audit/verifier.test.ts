@@ -4,6 +4,8 @@ import { digest } from "./signer.js";
 import { verifyAuditTranscript, type AuditMatchRow } from "./verifier.js";
 
 const match: AuditMatchRow = {
+  chainId: 421614,
+  dexAddress: "0x1111111111111111111111111111111111111111",
   id: 42n,
   batchId: 7n,
   pairId: 0,
@@ -66,6 +68,40 @@ describe("audit verifier", () => {
       quoteFilled: true,
     });
     expect(result.auction.recomputed).toBe(false);
+    expect(result.proofReceipt).toMatchObject({
+      schema: "obsidian.match.proof-receipt.v1",
+      matchId: "42",
+      batchId: "7",
+      pairId: 0,
+      chainId: 421614,
+      dexAddress: "0x1111111111111111111111111111111111111111",
+      orderAId: "9",
+      orderBId: "11",
+      publishTxHash: "0xabc123",
+      transcriptDigest: {
+        stored: d,
+        recomputed: d,
+        ok: true,
+      },
+      matcherSignature: {
+        expectedSigner: wallet.address,
+        ok: true,
+      },
+      checks: {
+        fieldsOk: true,
+        auctionRecomputed: false,
+        auctionOk: null,
+        transcriptSchema: "match-v1",
+        publishedAt: "2026-05-26T00:00:00.000Z",
+      },
+      commitments: {
+        privateInputRoot: null,
+        privateInputCount: null,
+        outputRoot: null,
+        outputMatchCount: 1,
+        salted: false,
+      },
+    });
   });
 
   it("marks tampered transcripts invalid without exposing transcript payloads", async () => {
@@ -117,6 +153,7 @@ describe("audit verifier", () => {
     };
     const body = {
       schema: "match-v2-private-auction-inputs",
+      privateProofSalt: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       matchId: "42",
       batchId: "7",
       pairId: 0,
@@ -182,5 +219,23 @@ describe("audit verifier", () => {
       reason: "Auction recomputation matched the private transcript and indexed match.",
     });
     expect(result.transcript.schema).toBe("match-v2-private-auction-inputs");
+    expect(result.proofReceipt.commitments).toEqual({
+      privateInputRoot: digest({
+        schema: "obsidian.audit.private-input-root.v1",
+        privateProofSalt: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        inputOrders: body.auction.inputOrders,
+      }),
+      privateInputCount: 2,
+      outputRoot: digest({
+        schema: "obsidian.audit.output-root.v1",
+        privateProofSalt: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        matches: body.auction.matches,
+      }),
+      outputMatchCount: 1,
+      salted: true,
+    });
+    expect(JSON.stringify(result.proofReceipt)).not.toContain("remainingDeposit");
+    expect(JSON.stringify(result.proofReceipt)).not.toContain("BUY");
+    expect(JSON.stringify(result.proofReceipt)).not.toContain("0123456789abcdef");
   });
 });
