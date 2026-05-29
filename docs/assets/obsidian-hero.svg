@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1054" height="391" viewBox="0 0 1054 391" role="img" aria-labelledby="title desc">
+  <title id="title">Obsidian confidential dark pool</title>
+  <desc id="desc">A black obsidian texture with a faceted rock mark and metallic Obsidian wordmark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#050505"/>
+      <stop offset="0.45" stop-color="#111"/>
+      <stop offset="1" stop-color="#020202"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f4f5f7"/>
+      <stop offset="0.42" stop-color="#c9cbd0"/>
+      <stop offset="0.58" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#8f939b"/>
+    </linearGradient>
+    <linearGradient id="rockA" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#7f8792"/>
+      <stop offset="0.35" stop-color="#29303a"/>
+      <stop offset="0.75" stop-color="#090b0e"/>
+      <stop offset="1" stop-color="#4b535e"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="6" flood-color="#000" flood-opacity="0.75"/>
+    </filter>
+    <filter id="deepShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="8" dy="14" stdDeviation="2.4" flood-color="#000" flood-opacity="0.95"/>
+    </filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018 0.09" numOctaves="4" seed="18"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.22"/>
+      </feComponentTransfer>
+      <feBlend mode="screen" in2="SourceGraphic"/>
+    </filter>
+    <filter id="gloss" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="10"/>
+      <feColorMatrix type="matrix" values="1 0 0 0 0.6 0 1 0 0 0.6 0 0 1 0 0.6 0 0 0 0.28 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1054" height="391" fill="url(#bg)"/>
+  <g opacity="0.7" filter="url(#grain)">
+    <path d="M-10 83 C130 36 218 120 334 68 C454 14 572 99 690 45 C826 -16 925 61 1064 20 L1064 393 L-10 393 Z" fill="#0a0a0b"/>
+    <path d="M0 276 C118 209 231 269 363 215 C514 152 618 254 758 189 C889 128 949 178 1056 136 L1056 393 L0 393 Z" fill="#121214"/>
+    <path d="M41 18 C103 72 151 27 202 84 C266 155 345 78 413 137 C501 212 575 118 660 164 C763 220 828 111 928 157 C984 183 1016 151 1054 132 L1054 0 L41 0 Z" fill="#09090a"/>
+  </g>
+
+  <g opacity="0.62" filter="url(#gloss)">
+    <path d="M46 62 C91 12 134 38 165 74 C194 108 258 85 279 125 C303 170 234 185 190 167 C146 149 92 168 58 134 C38 114 28 85 46 62 Z" fill="#fff"/>
+    <path d="M548 60 C620 18 699 54 744 100 C786 144 882 121 922 172 C968 231 852 256 780 229 C702 200 627 242 560 202 C502 168 488 95 548 60 Z" fill="#fff"/>
+    <path d="M765 20 C856 -16 940 21 1005 68 C1031 87 1044 107 1054 130 L1054 0 L765 0 Z" fill="#fff"/>
+  </g>
+
+  <g transform="translate(90 97)" filter="url(#softShadow)">
+    <path d="M63 7 L119 38 L139 96 L101 178 L37 153 L8 91 Z" fill="url(#rockA)" stroke="#77808b" stroke-opacity="0.38" stroke-width="2"/>
+    <path d="M63 7 L72 82 L8 91 Z" fill="#9aa1a8" opacity="0.58"/>
+    <path d="M72 82 L119 38 L139 96 Z" fill="#151a21" opacity="0.95"/>
+    <path d="M72 82 L101 178 L37 153 Z" fill="#252b34"/>
+    <path d="M72 82 L139 96 L101 178 Z" fill="#06080a"/>
+    <path d="M8 91 L37 153 L72 82 Z" fill="#424955"/>
+    <path d="M33 61 C51 43 81 54 103 34" fill="none" stroke="#d8dde5" stroke-opacity="0.5" stroke-width="5"/>
+    <path d="M22 96 C50 72 73 96 101 76" fill="none" stroke="#bec5ce" stroke-opacity="0.28" stroke-width="4"/>
+    <path d="M50 143 C69 122 89 139 119 105" fill="none" stroke="#b6bdc7" stroke-opacity="0.24" stroke-width="3"/>
+  </g>
+
+  <g font-family="Arial Black, Impact, Arial, sans-serif" font-weight="900" font-size="128" letter-spacing="0">
+    <text x="288" y="244" fill="#6b6f77" opacity="0.95" transform="skewX(-3)" filter="url(#deepShadow)">Obsidian</text>
+    <text x="280" y="232" fill="url(#metal)" stroke="#f8f9fb" stroke-opacity="0.65" stroke-width="2" transform="skewX(-3)">Obsidian</text>
+    <text x="280" y="232" fill="none" stroke="#757a83" stroke-width="7" stroke-opacity="0.28" transform="skewX(-3)">Obsidian</text>
+    <text x="280" y="232" fill="url(#metal)" stroke="#ffffff" stroke-opacity="0.52" stroke-width="1.2" transform="skewX(-3)">Obsidian</text>
+  </g>
+
+  <rect x="0" y="0" width="1054" height="391" fill="none" stroke="#222" stroke-opacity="0.4"/>
+</svg>

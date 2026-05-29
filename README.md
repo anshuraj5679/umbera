@@ -1,64 +1,183 @@
-# Dark Pool DEX
+# Obsidian
 
-Encrypted batch-auction DEX on Fhenix CoFHE. Arbitrum Sepolia target.
+<p align="center">
+  <img src="docs/assets/obsidian-hero.svg" alt="Obsidian confidential dark pool" width="100%" />
+</p>
 
-Current privacy posture:
-- Browser and matcher encryption/decryption use `@cofhe/sdk`.
-- `decryptForView` is permit-backed for readable values; `decryptForTx` helpers are wired for transaction-bound decrypt results.
-- The matcher decrypts order legs only in memory for auction execution. The order database stores ciphertext handles and public lifecycle metadata, not plaintext side, size, limit price, or remaining amounts.
+<p align="center">
+  <strong>Confidential batch-auction dark pool for encrypted onchain execution.</strong>
+</p>
 
-See `docs/superpowers/specs/2026-05-16-darkpool-dex-v1-design.md` for design,
-`docs/superpowers/plans/2026-05-16-darkpool-dex-v1.md` for plan,
-`docs/PRODUCT-SPEC.md` for product direction,
-`docs/PRODUCTION-DEMO-PLAN.md` for the current grant-demo execution plan,
-`docs/MARKET-READY-IMPLEMENTATION-PLAN.md` for the next alpha implementation plan,
-`docs/relayer-LEVEL-UPGRADE-PLAN.md` for the production-grade architecture upgrade path,
-`docs/PROOF-MOAT-PROTOCOL-PLAN.md` for the proof-backed privacy roadmap,
-`docs/VERCEL-LAUNCH-CHECKLIST.md` for the deployed judge-review checklist,
-`docs/PRODUCTION-80-ROADMAP.md` for the 70-80% alpha roadmap,
-`docs/ALPHA-80-AGENT-SPEC.md` for maker, audit, API, and ops agent specs,
-`docs/X402-AGENT-API.md` for the autonomous agent order entry point,
-`docs/LIVE-DEMO-CHECKLIST.md` for the grant-demo path,
-`docs/RUNBOOK.md` for ops.
+<p align="center">
+  <img alt="Arbitrum Sepolia" src="https://img.shields.io/badge/Arbitrum%20Sepolia-live-111111?style=for-the-badge&labelColor=000000" />
+  <img alt="Fhenix CoFHE" src="https://img.shields.io/badge/Fhenix%20CoFHE-encrypted-2b2f36?style=for-the-badge&labelColor=000000" />
+  <img alt="Proof receipts" src="https://img.shields.io/badge/proof%20receipts-public-9ca3af?style=for-the-badge&labelColor=000000&color=3f4652" />
+</p>
 
-## Quick start
+<p align="center">
+  <a href="https://obsidian-darkpool.vercel.app">Live App</a>
+  ·
+  <a href="https://obsidian-darkpool.vercel.app/api/health">System Health</a>
+  ·
+  <a href="https://obsidian-darkpool.vercel.app/api/batches/386/audit">Batch Proof Receipt</a>
+</p>
 
-    cp .env.example .env
-    pnpm install
-    pnpm -F contracts build
-    pnpm -F matcher dev
-    pnpm -F frontend dev
+Obsidian is a private execution venue for traders, treasuries, market makers, and autonomous agents that need to express size and limit price without lighting up the public market before execution.
 
-## Demo market
+The current alpha runs on Arbitrum Sepolia with Fhenix CoFHE encryption. Users submit sealed orders, the trusted V1 matcher decrypts only inside the auction flow, matches orders in batches, publishes encrypted settlement, and exposes public audit receipts that let reviewers verify what happened without revealing private auction inputs.
 
-The production-demo path keeps the browser operator console and CLI operator as
-fallback tools. The EC2 server matcher has now completed a daemon-only Arbitrum
-Sepolia close, match, audit-log, and settlement run.
+## Dark Pool Surface
 
-    pnpm demo:market:status
-    pnpm demo:market:seed
-    pnpm demo:market:orders
-pnpm demo:market:close
-pnpm demo:operator 0
-pnpm demo:settle
-
-## Maker bot dry-run
-
-The maker bot runner plans bounded demo liquidity without submitting transactions:
-
-    npm --prefix matcher run maker:dry-run -- --seed demo-smoke --max-orders 8
-
-Live submission is guarded behind the explicit `maker:execute` script and uses the encrypted agent order path.
-
-## Vercel review
-
-The deployed app must use a public HTTPS matcher API:
+The review surface is the deployed product, not a local script:
 
 ```text
-MATCHER_API_URL=https://<public-matcher-api>
+https://obsidian-darkpool.vercel.app
+```
+
+From the live app a reviewer can connect a wallet, prepare encrypted test assets, submit a private order, inspect order lifecycle, watch settled dark-pool candles, review recent batches, and check matcher health.
+
+What is live today:
+
+- Arbitrum Sepolia deployment using encrypted test assets such as `eUSDC` and `eWETH`.
+- Wallet setup, faucet, wrapping, approvals, private order entry, orders, markets, batches, and health views.
+- Side-private order ABI where public calldata does not expose BUY/SELL side.
+- Backend order storage that avoids plaintext `side`, `baseAmount`, `limitPrice`, and `remainingBase`.
+- Autonomous matcher workers for batch close, match, settlement retry, catchup, and health reporting.
+- Market candles built only from settled matches.
+- Public match and batch audit receipts with salted commitment roots.
+- Agent order entry path for x402-gated integrations without making the encrypted trading token public.
+
+## Execution Core
+
+Obsidian is not an AMM with a fake private skin. It is built around sealed batch execution:
+
+| Layer | Obsidian behavior |
+|---|---|
+| Order entry | Traders submit encrypted order legs and public lifecycle metadata. |
+| Privacy | Public observers see participation metadata, not side, size, limit price, or remaining amount. |
+| Matching | A trusted V1 matcher decrypts authorized handles in memory, computes a uniform clearing result, and publishes encrypted fills. |
+| Settlement | On-chain settlement transfers encrypted assets within escrow limits. |
+| Proofs | Public receipts expose verifier status, signatures, tx links, and salted roots instead of raw private inputs. |
+| Markets | Candles are built only from settled dark-pool matches. No fake depth, no fake order book, no synthetic volume. |
+
+## The Edge
+
+The product is shaped around the hardest parts of confidential execution:
+
+- Confidential intent: side, size, price, and remaining amount stay out of public calldata and backend plaintext storage.
+- Batch fairness: orders clear through uniform batch auctions rather than public mempool racing.
+- Auditability without disclosure: receipts prove transcript integrity, matcher signature validity, auction recomputation, and salted input/output roots.
+- Deployed review surface: judges and users can test the product from Vercel instead of relying on local scripts.
+- Agent-native access: automated agents can pay for access separately from encrypted trading settlement.
+- Production path: the architecture is moving toward proof-backed settlement, reorg-safe indexing, relayer state, account commitments, and multi-matcher execution.
+
+## Live Proof Surface
+
+```text
+Frontend              https://obsidian-darkpool.vercel.app
+Health                https://obsidian-darkpool.vercel.app/api/health
+Markets               https://obsidian-darkpool.vercel.app/api/markets
+Recent batches        https://obsidian-darkpool.vercel.app/api/batches/recent
+Match audit receipt   https://obsidian-darkpool.vercel.app/api/matches/1/audit
+Batch audit receipt   https://obsidian-darkpool.vercel.app/api/batches/386/audit
+```
+
+## Privacy Model
+
+Current implementation:
+
+- Browser and matcher encryption/decryption use `@cofhe/sdk`.
+- `decryptForView` is permit-backed for user/operator-readable values.
+- `decryptForTx` helper paths are wired for transaction-bound decrypt results.
+- The matcher decrypts order legs only in process memory for auction execution.
+- The order database stores ciphertext handles and public lifecycle metadata.
+- The order database does not store plaintext `side`, `baseAmount`, `limitPrice`, or `remainingBase`.
+- Public proof receipts expose salted commitment roots, not private values or private salts.
+
+V1 trust model:
+
+- Obsidian V1 uses a trusted matcher.
+- Order values are hidden publicly, but the authorized matcher decrypts for auction execution.
+- Audit transcripts and proof receipts verify what the matcher did.
+- V2 direction includes stronger proof-backed settlement, root anchoring, and multi-matcher or threshold execution.
+
+## System Map
+
+```text
+frontend/
+  Next.js app, wallet flow, setup, pool, orders, markets, batches, health
+
+contracts/
+  DarkPoolDEX contracts, encrypted token flow, settlement constraints, tests
+
+matcher/
+  Indexer, matcher workers, settlement retry, relayer state, audit verifier, public API
+
+shared/
+  Auction logic, pricing, commitment helpers, deployed addresses
+
+docs/
+  Product spec, proof roadmap, launch checklist, runbook, architecture plans
+```
+
+## Road To Production Privacy
+
+The next protocol work is focused on reducing V1 trust while preserving the same clean product surface:
+
+- Anchor batch proof roots on-chain.
+- Add proof adapters for fraud-proof or ZK-backed auction verification.
+- Harden reorg-safe indexing and settlement repair loops.
+- Expand account commitments so wallet identity is not the default public coordination layer.
+- Move from one trusted matcher toward multi-matcher or threshold execution.
+
+## Local Development
+
+```powershell
+cp .env.example .env
+pnpm install
+pnpm -F contracts build
+pnpm -F matcher dev
+pnpm -F frontend dev
+```
+
+The deployed product uses these public-facing settings:
+
+```text
 NEXT_PUBLIC_CHAIN_ID=421614
 NEXT_PUBLIC_DEX_ADDRESS=<dark-pool-dex-address>
 NEXT_PUBLIC_WALLETCONNECT_ID=<walletconnect-project-id>
+MATCHER_API_URL=https://<public-matcher-api>
 ```
 
-See `docs/VERCEL-LAUNCH-CHECKLIST.md` before sharing the Vercel link.
+Never commit `.env`, private keys, RPC secrets, or deployment wallets.
+
+## Verification
+
+Useful checks before shipping:
+
+```powershell
+npm --prefix frontend run typecheck
+npm --prefix frontend run build
+npm --prefix matcher run lint
+npm --prefix matcher test
+npm --prefix matcher run build
+npm --prefix shared test
+```
+
+Current deployed proof slice has been verified with:
+
+- Vercel health returning `ok: true`
+- Direct matcher health returning `ok: true`
+- Match audit receipt returning `obsidian.match.proof-receipt.v1`
+- Batch audit receipt returning `obsidian.batch.proof-receipt.v1`
+- Salted private input and output roots present for the live proof batch
+
+## Docs
+
+- [Product Spec](docs/PRODUCT-SPEC.md)
+- [Proof Moat Protocol Plan](docs/PROOF-MOAT-PROTOCOL-PLAN.md)
+- [Vercel Launch Checklist](docs/VERCEL-LAUNCH-CHECKLIST.md)
+- [relayer-Level Upgrade Plan](docs/relayer-LEVEL-UPGRADE-PLAN.md)
+- [Production 80 Roadmap](docs/PRODUCTION-80-ROADMAP.md)
+- [Agent API](docs/X402-AGENT-API.md)
+- [Runbook](docs/RUNBOOK.md)
