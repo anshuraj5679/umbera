@@ -6,6 +6,16 @@ import { and, eq } from "drizzle-orm";
 import { runTask } from "../tasks/store.js";
 import { markOrdersSettled, type DeploymentScope } from "../orders/lifecycle.js";
 
+export type SettlementMatchRow = {
+  id: bigint;
+  auditS3Key: string | null;
+};
+
+export type SettlementReceiptLike = {
+  hash?: string;
+  status?: number | null;
+};
+
 export function startSettler(dex: Contract, db: Db, disputeWindowSec: number, scope?: DeploymentScope) {
   let running = false;
   cron.schedule("*/30 * * * * *", async () => {
@@ -42,22 +52,46 @@ export function startSettler(dex: Contract, db: Db, disputeWindowSec: number, sc
 }
 
 export async function settleOneMatch(dex: Contract, db: Db, matchId: bigint, scope?: DeploymentScope) {
-  await (dex as any).settleMatch.staticCall(matchId);
-  const tx = await (dex as any).settleMatch(matchId);
-  const rcpt = await tx.wait();
   const match = await db.select()
     .from(matchesTable)
     .where(scopedIdWhere(matchId, scope))
     .limit(1)
     .then((rows) => rows[0]);
+  assertSettlementMatchReady(match);
+
+  await (dex as any).settleMatch.staticCall(matchId);
+  const tx = await (dex as any).settleMatch(matchId);
+  const rcpt = await tx.wait();
+  assertSettlementReceiptSucceeded(rcpt);
   await db.update(matchesTable)
     .set({ status: "SETTLED", settledAt: new Date(), settleTxHash: rcpt.hash })
     .where(scopedIdWhere(matchId, scope));
-  if (match) {
-    await markOrdersSettled(db, [match.buyOrderId, match.sellOrderId], scope);
-  }
+  await markOrdersSettled(db, [match.buyOrderId, match.sellOrderId], scope);
   console.log("settled", matchId.toString());
-  return { ok: true, matchId: matchId.toString(), txHash: rcpt.hash };
+  return {
+    ok: true,
+    matchId: matchId.toString(),
+    txHash: rcpt.hash,
+    blockNumber: rcpt.blockNumber?.toString?.() ?? null,
+  };
+}
+
+export function assertSettlementMatchReady<T extends SettlementMatchRow>(match: T | null | undefined): asserts match is T {
+  if (!match) {
+    throw new Error("settlement blocked: match is not indexed");
+  }
+  if (!match.auditS3Key) {
+    throw new Error(`settlement blocked: match ${match.id.toString()} has no audit transcript`);
+  }
+}
+
+export function assertSettlementReceiptSucceeded(receipt: SettlementReceiptLike | null | undefined) {
+  if (!receipt) {
+    throw new Error("settlement failed: missing transaction receipt");
+  }
+  if (receipt.status !== 1) {
+    throw new Error(`settlement failed: receipt status ${receipt.status ?? "unknown"}`);
+  }
 }
 
 function matchStatusLabel(value: number): string {
