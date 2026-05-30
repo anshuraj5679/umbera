@@ -31,6 +31,7 @@ import {
   type AuditVerificationError,
   type AuditVerificationResult,
 } from "../audit/verifier.js";
+import { countMatchesMissingAuditKeys } from "../audit/repair.js";
 import { latestRelayerCheckpoint } from "../relayer/commitments.js";
 import {
   agentOrderIdempotencyKey,
@@ -405,6 +406,9 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
       reorgedLogCount: 0,
     },
     relayerState: null,
+    auditCoverage: {
+      missingTranscriptKeyCount: null,
+    },
     currentBatch: null,
     closedBatchesWaitingForMatch: [],
     pendingMatchesPastDisputeWindow: [],
@@ -438,6 +442,9 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
       latestCheckpoint: checkpoint ? publicRelayerCheckpointRow(checkpoint) : null,
       sessionAccountCount,
     };
+    health.auditCoverage.missingTranscriptKeyCount = await countMatchesMissingAuditKeys(db, httpCtx
+      ? { chainId: httpCtx.chainId, dexAddress: normalizeDexAddress(httpCtx.dexAddress) }
+      : undefined);
   } catch (error) {
     health.db.error = errorMessage(error);
     health.ok = false;

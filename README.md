@@ -1,7 +1,7 @@
 # Obsidian
 
 <p align="center">
-  <img src="docs/assets/obsidian-hero.svg" alt="Obsidian confidential dark pool" width="100%" />
+  <img src="docs/assets/obsidian-hero.png" alt="Obsidian confidential dark pool" width="100%" />
 </p>
 
 <p align="center">
@@ -45,6 +45,7 @@ What is live today:
 - Autonomous matcher workers for batch close, match, settlement retry, catchup, and health reporting.
 - Market candles built only from settled matches.
 - Public match and batch audit receipts with salted commitment roots.
+- Audit transcript repair for deterministic proof recovery when indexed metadata lags object storage.
 - Agent order entry path for x402-gated integrations without making the encrypted trading token public.
 
 ## Execution Core

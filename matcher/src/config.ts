@@ -35,6 +35,7 @@ const envSchema = z.object({
   MATCHER_EMPTY_BATCH_CLOSE_AFTER_SEC: z.coerce.number().int().min(0).default(0),
   MATCHER_BATCH_MATCH_DELAY_SEC: z.coerce.number().int().min(0).max(600).default(15),
   MATCHER_ANCHOR_BATCH_PROOFS: envBool.default(false),
+  MATCHER_AUDIT_REPAIR_INTERVAL_SEC: z.coerce.number().int().min(0).default(300),
   MATCHER_RETRY_WORKER_INTERVAL_SEC: z.coerce.number().int().min(0).default(20),
   MATCHER_TASK_LEASE_SEC: z.coerce.number().int().min(10).max(900).default(120),
   MATCHER_CORS_ORIGINS: optionalEnv(z.string()),

@@ -18,6 +18,7 @@ import { runTask, type TaskRow } from "./tasks/store.js";
 import { matches as matchesTable } from "./db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { verifyAuditTranscriptFromS3 } from "./audit/verifier.js";
+import { startAuditRepairWorker } from "./audit/repair.js";
 import { reconcileOrderStatusesFromMatches } from "./orders/lifecycle.js";
 
 async function main() {
@@ -96,15 +97,19 @@ async function main() {
     }
   );
 
-  subscribe(dexEvents(dep.dex, chain.wsProvider), {
+  const eventContract = dexEvents(dep.dex, chain.wsProvider);
+  const eventHandlers = {
     OrderSubmitted: indexEvent,
     OrderSubmittedPrivate: indexEvent,
     BatchClosed: indexAndMatchClosedBatch,
-    BatchProofAnchored: indexEvent,
     MatchPublished: indexEvent,
     MatchDisputed: indexEvent,
     MatchSettled: indexEvent,
-  });
+  } as Record<string, typeof indexEvent>;
+  if (hasEvent(eventContract, "BatchProofAnchored")) {
+    eventHandlers.BatchProofAnchored = indexEvent;
+  }
+  subscribe(eventContract, eventHandlers);
 
   const disputeWindow = Number(await (dex as any).disputeWindow());
   startBatchCloser(dex, indexAndMatchClosedBatch, {
@@ -115,6 +120,9 @@ async function main() {
   });
   startBatchMatcher(dex, dep.dex, db, dep.pairs as any, auditCtx, batchMatcherOptions);
   startSettler(dex, db, disputeWindow, deploymentScope);
+  startAuditRepairWorker(db, deploymentScope, cfg.S3_BUCKET, {
+    intervalSec: cfg.MATCHER_AUDIT_REPAIR_INTERVAL_SEC,
+  });
   startRetryWorker(db, {
     CLOSE_BATCH: async (task) => {
       if (!task.batchId) throw new Error("CLOSE_BATCH task missing batchId");
@@ -178,4 +186,12 @@ async function verifyAuditTask(task: TaskRow, db: Db, bucket: string, matcherAdd
       matcherAddress,
     }),
   };
+}
+
+function hasEvent(contract: any, name: string): boolean {
+  try {
+    return contract.interface.getEvent(name) !== null;
+  } catch {
+    return false;
+  }
 }
