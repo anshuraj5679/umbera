@@ -31,7 +31,7 @@ import {
   type AuditVerificationError,
   type AuditVerificationResult,
 } from "../audit/verifier.js";
-import { countMatchesMissingAuditKeys } from "../audit/repair.js";
+import { countMatchesMissingAuditKeys, repairMissingAuditKeys } from "../audit/repair.js";
 import { latestRelayerCheckpoint } from "../relayer/commitments.js";
 import {
   agentOrderIdempotencyKey,
@@ -314,6 +314,30 @@ export function startHttp(
       sendAuditVerificationError(res, error);
     }
   });
+  app.post("/operator/audits/repair", verifySignedHeader(matcherAddress), async (req, res) => {
+    if (!httpCtx?.auditBucket) {
+      return res.status(503).json({ error: "audit verifier is not configured", code: "audit_verifier_unconfigured" });
+    }
+    const limit = parsePositiveInteger(req.body?.limit ?? req.query.limit, 25, 100);
+    const scope = {
+      chainId: httpCtx.chainId,
+      dexAddress: normalizeDexAddress(httpCtx.dexAddress),
+    };
+    try {
+      const { task, result, replayed } = await runTask(db, {
+        type: "REPAIR_AUDIT_KEYS",
+        scope: "OPERATOR",
+        payload: { limit },
+      }, async () => ({
+        ok: true,
+        repair: await repairMissingAuditKeys(db, scope, httpCtx.auditBucket!, { batchSize: limit }),
+      }));
+      res.json({ ...result, taskId: task.id, replayed });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: redactErrorMessage(message), code: "audit_repair_failed" });
+    }
+  });
   app.get("/operator/indexer/status", verifySignedHeader(matcherAddress), async (_req, res) => {
     res.json(await buildIndexerStatus(db, httpCtx));
   });
@@ -407,6 +431,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
     },
     relayerState: null,
     auditCoverage: {
+      ok: null,
       missingTranscriptKeyCount: null,
     },
     currentBatch: null,
@@ -442,9 +467,11 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
       latestCheckpoint: checkpoint ? publicRelayerCheckpointRow(checkpoint) : null,
       sessionAccountCount,
     };
-    health.auditCoverage.missingTranscriptKeyCount = await countMatchesMissingAuditKeys(db, httpCtx
+    const missingTranscriptKeyCount = await countMatchesMissingAuditKeys(db, httpCtx
       ? { chainId: httpCtx.chainId, dexAddress: normalizeDexAddress(httpCtx.dexAddress) }
       : undefined);
+    health.auditCoverage.missingTranscriptKeyCount = missingTranscriptKeyCount;
+    health.auditCoverage.ok = missingTranscriptKeyCount === 0;
   } catch (error) {
     health.db.error = errorMessage(error);
     health.ok = false;

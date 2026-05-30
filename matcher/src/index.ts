@@ -18,7 +18,7 @@ import { runTask, type TaskRow } from "./tasks/store.js";
 import { matches as matchesTable } from "./db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { verifyAuditTranscriptFromS3 } from "./audit/verifier.js";
-import { startAuditRepairWorker } from "./audit/repair.js";
+import { repairMissingAuditKeys, startAuditRepairWorker } from "./audit/repair.js";
 import { reconcileOrderStatusesFromMatches } from "./orders/lifecycle.js";
 
 async function main() {
@@ -137,6 +137,7 @@ async function main() {
       return settleOneMatch(dex, db, task.matchId, deploymentScope);
     },
     VERIFY_AUDIT: async (task) => verifyAuditTask(task, db, cfg.S3_BUCKET, chain.wallet.address, deploymentScope),
+    REPAIR_AUDIT_KEYS: async (task) => repairAuditKeysTask(task, db, cfg.S3_BUCKET, deploymentScope),
   }, {
     intervalSec: cfg.MATCHER_RETRY_WORKER_INTERVAL_SEC,
     leaseSec: cfg.MATCHER_TASK_LEASE_SEC,
@@ -186,6 +187,23 @@ async function verifyAuditTask(task: TaskRow, db: Db, bucket: string, matcherAdd
       matcherAddress,
     }),
   };
+}
+
+async function repairAuditKeysTask(task: TaskRow, db: Db, bucket: string, scope: { chainId: number; dexAddress: string }) {
+  const limit = repairLimitFromTask(task);
+  return {
+    ok: true,
+    repair: await repairMissingAuditKeys(db, scope, bucket, { batchSize: limit }),
+  };
+}
+
+function repairLimitFromTask(task: TaskRow): number {
+  const payload = task.payload && typeof task.payload === "object" && !Array.isArray(task.payload)
+    ? task.payload as Record<string, unknown>
+    : {};
+  const raw = Number(payload.limit ?? 25);
+  if (!Number.isInteger(raw) || raw < 1) return 25;
+  return Math.min(raw, 100);
 }
 
 function hasEvent(contract: any, name: string): boolean {
