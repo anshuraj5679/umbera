@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { Db } from "../db/client.js";
 import { matchBatch } from "../matching/runner.js";
 import { encryptUint128 } from "../matching/encode.js";
-import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
+import { batches as batchesTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
 import { writeAuditLog } from "../audit/s3.js";
 import { digest } from "../audit/signer.js";
 import { anchorBatchProof } from "../audit/batch.js";
@@ -11,6 +11,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import cron from "node-cron";
 import { runTask } from "../tasks/store.js";
 import { markOrdersMatched, normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
+import { errorMessage, recordWorkerError } from "./errors.js";
 
 const inFlightBatches = new Set<string>();
 const DEFAULT_MATCH_DELAY_SEC = 15;
@@ -428,18 +429,6 @@ async function getBatchClosedAt(dex: Contract, db: Db, batchId: bigint, scope: D
   const batch = await (dex as any).batches(batchId);
   const closedAt = BigInt((batch.closedAt ?? batch[1] ?? 0).toString());
   return closedAt > 0n ? new Date(Number(closedAt) * 1000) : null;
-}
-
-async function recordWorkerError(db: Db, component: string, payload: Record<string, unknown>) {
-  try {
-    await db.insert(errorsTable).values({ component, payload });
-  } catch (e) {
-    console.error("failed to record worker error", e);
-  }
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function matcherScope(dexAddr: string, options: BatchMatcherOptions): DeploymentScope {

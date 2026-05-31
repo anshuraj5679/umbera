@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { runTask } from "../tasks/store.js";
 import { markOrdersSettled, type DeploymentScope } from "../orders/lifecycle.js";
 import { verifyAuditTranscriptFromS3 } from "../audit/verifier.js";
+import { errorMessage, recordWorkerError, workerErrorPayload } from "./errors.js";
 
 export type SettlementMatchRow = {
   id: bigint;
@@ -49,7 +50,14 @@ export function startSettler(dex: Contract, db: Db, disputeWindowSec: number, sc
             idempotencyKey: `settle:${scopeKey(scope)}:${r.id.toString()}`,
             payload: { pairId: r.pairId },
           }, async () => settleOneMatch(dex, db, r.id, scope, proofCtx));
-        } catch (e) { console.error("settle failed", r.id.toString(), e); }
+        } catch (e) {
+          console.error("settle failed", r.id.toString(), e);
+          await recordWorkerError(db, "settler", workerErrorPayload(e, {
+            matchId: r.id.toString(),
+            batchId: r.batchId?.toString(),
+            pairId: r.pairId,
+          }));
+        }
       }
     } finally {
       running = false;

@@ -7,6 +7,7 @@ import {
   type TaskRow,
   type TaskType,
 } from "../tasks/store.js";
+import { errorMessage, recordWorkerError, workerErrorPayload } from "./errors.js";
 
 export type RetryHandler = (task: TaskRow) => Promise<unknown>;
 export type RetryHandlers = Partial<Record<TaskType, RetryHandler>>;
@@ -28,7 +29,8 @@ export function startRetryWorker(db: Db, handlers: RetryHandlers, options: Retry
     try {
       await runRetryOnce(db, handlers, { ...options, workerId });
     } catch (error) {
-      console.error("retry worker failed:", error instanceof Error ? error.message : String(error));
+      console.error("retry worker failed:", errorMessage(error));
+      await recordWorkerError(db, "retry-worker", workerErrorPayload(error));
     } finally {
       running = false;
     }
@@ -65,6 +67,13 @@ export async function runRetryOnce(
       completed++;
     } catch (error) {
       await failTask(db, lease.id, error, "retry task failed");
+      await recordWorkerError(db, "retry-worker", workerErrorPayload(error, {
+        taskId: lease.id,
+        batchId: lease.batchId?.toString(),
+        matchId: lease.matchId?.toString(),
+        orderId: lease.orderId?.toString(),
+        code: lease.type,
+      }));
       failed++;
     }
   }

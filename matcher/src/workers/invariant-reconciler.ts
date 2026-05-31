@@ -2,6 +2,7 @@ import type { Contract } from "ethers";
 import type { Db } from "../db/client.js";
 import { buildInvariantReport, enqueueInvariantRepairs } from "../ops/invariants.js";
 import { recoverStaleRunningTasks } from "../tasks/store.js";
+import { errorMessage, recordWorkerError, workerErrorPayload } from "./errors.js";
 
 export type InvariantReconcilerOptions = {
   intervalSec: number;
@@ -36,7 +37,8 @@ export function startInvariantReconciler(db: Db, options: InvariantReconcilerOpt
         });
       }
     } catch (error) {
-      console.error("invariant reconcile failed:", error instanceof Error ? error.message : String(error));
+      console.error("invariant reconcile failed:", errorMessage(error));
+      await recordWorkerError(db, "invariant-reconciler", workerErrorPayload(error));
     } finally {
       running = false;
     }
@@ -69,7 +71,8 @@ export function startStaleTaskRecovery(db: Db, options: StaleTaskRecoveryOptions
         console.log("stale task recovery", result);
       }
     } catch (error) {
-      console.error("stale task recovery failed:", error instanceof Error ? error.message : String(error));
+      console.error("stale task recovery failed:", errorMessage(error));
+      await recordWorkerError(db, "stale-task-recovery", workerErrorPayload(error));
     } finally {
       running = false;
     }
