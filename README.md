@@ -72,7 +72,7 @@ The product is shaped around the hardest parts of confidential execution:
 - Deployed review surface: judges and users can test the product from Vercel instead of relying on local scripts.
 - Agent-native access: automated agents can pay for access separately from encrypted trading identity.
 - Production-grade backend: reorg-aware indexing, retry workers, relayer state, account commitments, and public proof receipts.
-- Runtime privacy guardrails: `/api/health` and operator invariants surface storage regressions before they become silent leaks.
+- Runtime privacy guardrails: `/api/health` and operator invariants surface storage regressions before they become silent leaks, with repair tasks for historical audit/task residue.
 
 ## Live Proof Surface
 

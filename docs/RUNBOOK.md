@@ -14,6 +14,7 @@
 - Operator reconcile: signed `POST /operator/reconcile`
 
 The invariant report is expected to stay `ok: true`. Privacy warnings can be reconciled with `POST /operator/reconcile`; this enqueues `SCRUB_PRIVATE_TASK_DATA` when historical task payload, task event, or worker error residue is detected.
+It also enqueues `REPAIR_AUDIT_PRIVACY` when legacy audit transcript objects need to be rewritten as receipt-only v2 objects.
 
 Privacy blockers require immediate investigation:
 

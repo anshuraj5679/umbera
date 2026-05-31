@@ -3,7 +3,13 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import { matches as matchesTable } from "../db/schema.js";
 import type { DeploymentScope } from "../orders/lifecycle.js";
-import { fetchAuditTranscript } from "./verifier.js";
+import { writeAuditLog } from "./s3.js";
+import {
+  fetchAuditTranscript,
+  verifyAuditTranscriptFromS3,
+  type AuditMatchRow,
+  type AuditProofReceipt,
+} from "./verifier.js";
 
 export type AuditObjectPrivacyIssue = {
   code: "LEGACY_AUDIT_SCHEMA" | "AUDIT_PRIVATE_FIELDS" | "AUDIT_SCAN_FAILED";
@@ -18,6 +24,14 @@ export type AuditObjectPrivacyScan = {
   legacySchemaCount: number;
   forbiddenFieldCount: number;
   failedCount: number;
+  issues: AuditObjectPrivacyIssue[];
+};
+
+export type AuditObjectPrivacyRepairResult = {
+  checked: number;
+  rewritten: number;
+  skipped: number;
+  failed: number;
   issues: AuditObjectPrivacyIssue[];
 };
 
@@ -99,6 +113,110 @@ export async function scanAuditObjectPrivacy(db: Db, input: {
     forbiddenFieldCount,
     failedCount,
     issues,
+  };
+}
+
+export async function repairLegacyAuditObjects(db: Db, input: {
+  scope: DeploymentScope;
+  bucket: string;
+  matcherAddress: string;
+  signMessage: (message: string) => Promise<string>;
+  limit?: number;
+  s3Client?: S3Client;
+}): Promise<AuditObjectPrivacyRepairResult> {
+  const rows = await db.select()
+    .from(matchesTable)
+    .where(and(
+      eq(matchesTable.chainId, input.scope.chainId),
+      eq(matchesTable.dexAddress, input.scope.dexAddress),
+      isNotNull(matchesTable.auditS3Key),
+    ))
+    .orderBy(desc(matchesTable.publishedAt), desc(matchesTable.id))
+    .limit(input.limit ?? 25);
+
+  const issues: AuditObjectPrivacyIssue[] = [];
+  let checked = 0;
+  let rewritten = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    if (!row.auditS3Key) continue;
+    checked++;
+    try {
+      const transcript = await fetchAuditTranscript(input.s3Client ?? defaultS3Client, input.bucket, row.auditS3Key);
+      const schema = typeof transcript.schema === "string" ? transcript.schema : null;
+      const forbiddenFields = forbiddenAuditFields(transcript);
+      if (schema === RECEIPT_V2_SCHEMA && forbiddenFields.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      const verification = await verifyAuditTranscriptFromS3({
+        bucket: input.bucket,
+        key: row.auditS3Key,
+        match: row,
+        matcherAddress: input.matcherAddress,
+        s3Client: input.s3Client ?? defaultS3Client,
+      });
+      if (!verification.ok) {
+        failed++;
+        issues.push({
+          code: "AUDIT_SCAN_FAILED",
+          matchId: row.id.toString(),
+          batchId: row.batchId.toString(),
+          schema,
+        });
+        continue;
+      }
+
+      await writeAuditLog(
+        input.bucket,
+        row.auditS3Key,
+        buildReceiptOnlyAuditBody(verification.proofReceipt, row),
+        input.signMessage,
+      );
+      rewritten++;
+    } catch {
+      failed++;
+      issues.push({
+        code: "AUDIT_SCAN_FAILED",
+        matchId: row.id.toString(),
+        batchId: row.batchId.toString(),
+        schema: null,
+      });
+    }
+  }
+
+  return {
+    checked,
+    rewritten,
+    skipped,
+    failed,
+    issues,
+  };
+}
+
+export function buildReceiptOnlyAuditBody(receipt: AuditProofReceipt, match: AuditMatchRow) {
+  return {
+    schema: RECEIPT_V2_SCHEMA,
+    matchId: receipt.matchId,
+    batchId: receipt.batchId,
+    pairId: receipt.pairId,
+    orderAId: receipt.orderAId,
+    orderBId: receipt.orderBId,
+    auctionAlgorithm: "uniform-clearing-v1",
+    clearingPriceQuotePerBaseScaled: match.clearingPriceNum,
+    baseFilled: match.baseFilled,
+    quoteFilled: match.quoteFilled,
+    privateInputRoot: receipt.commitments.privateInputRoot,
+    privateInputCount: receipt.commitments.privateInputCount,
+    outputRoot: receipt.commitments.outputRoot,
+    outputMatchCount: receipt.commitments.outputMatchCount,
+    salted: receipt.commitments.salted,
+    publishedAt: receipt.checks.publishedAt,
+    txHash: receipt.publishTxHash,
+    matcherAddress: receipt.matcherSignature.expectedSigner,
   };
 }
 

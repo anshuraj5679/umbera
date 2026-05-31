@@ -175,6 +175,15 @@ export async function enqueueInvariantRepairs(db: Db, report: InvariantReport) {
       payload: { source: "invariant_reconcile" },
     }));
   }
+  const repairAuditPrivacy = report.issues.some((issue) => issue.taskType === "REPAIR_AUDIT_PRIVACY");
+  if (repairAuditPrivacy) {
+    tasks.push(await createTaskIfMissing(db, {
+      idempotencyKey: `reconcile:${report.chainId}:${report.dexAddress}:repair-audit-privacy`,
+      type: "REPAIR_AUDIT_PRIVACY",
+      scope: "OPERATOR",
+      payload: { source: "invariant_reconcile", limit: 25 },
+    }));
+  }
   for (const issue of report.issues) {
     if (issue.taskType === "MATCH_BATCH" && issue.batchId) {
       tasks.push(await createTaskIfMissing(db, {
@@ -311,6 +320,7 @@ function addPrivacyIssues(issues: InvariantIssue[], privacy: PrivacyPostureRepor
       message: "Recent audit objects include legacy transcript schemas instead of receipt-only v2 objects.",
       count: privacy.auditObjects.legacySchemaCount,
       schema: privacy.auditObjects.issues.find((issue) => issue.code === "LEGACY_AUDIT_SCHEMA")?.schema ?? null,
+      taskType: "REPAIR_AUDIT_PRIVACY",
     });
   }
   if (privacy.auditObjects && privacy.auditObjects.forbiddenFieldCount > 0) {
@@ -324,6 +334,7 @@ function addPrivacyIssues(issues: InvariantIssue[], privacy: PrivacyPostureRepor
       batchId: issue?.batchId,
       forbiddenFields: issue?.forbiddenFields,
       schema: issue?.schema ?? null,
+      taskType: "REPAIR_AUDIT_PRIVACY",
     });
   }
   if (privacy.auditObjects && privacy.auditObjects.failedCount > 0) {
@@ -332,6 +343,7 @@ function addPrivacyIssues(issues: InvariantIssue[], privacy: PrivacyPostureRepor
       code: "AUDIT_OBJECT_PRIVACY_SCAN_FAILED",
       message: "Recent audit objects could not be scanned for privacy posture.",
       count: privacy.auditObjects.failedCount,
+      taskType: "REPAIR_AUDIT_PRIVACY",
     });
   }
 }

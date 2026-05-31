@@ -20,6 +20,7 @@ import { matches as matchesTable } from "./db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { verifyAuditTranscriptFromS3 } from "./audit/verifier.js";
 import { repairMissingAuditKeys, startAuditRepairWorker } from "./audit/repair.js";
+import { repairLegacyAuditObjects } from "./audit/privacy.js";
 import { reconcileOrderStatusesFromMatches } from "./orders/lifecycle.js";
 import { scrubPrivateTaskResidue } from "./privacy/scrub.js";
 
@@ -146,6 +147,7 @@ async function main() {
     },
     VERIFY_AUDIT: async (task) => verifyAuditTask(task, db, cfg.S3_BUCKET, chain.wallet.address, deploymentScope),
     REPAIR_AUDIT_KEYS: async (task) => repairAuditKeysTask(task, db, cfg.S3_BUCKET, deploymentScope),
+    REPAIR_AUDIT_PRIVACY: async (task) => repairAuditPrivacyTask(task, db, cfg.S3_BUCKET, chain.wallet.address, chain.wallet.signMessage.bind(chain.wallet), deploymentScope),
     SCRUB_PRIVATE_TASK_DATA: async () => ({
       ok: true,
       scrub: await scrubPrivateTaskResidue(db),
@@ -209,6 +211,27 @@ async function repairAuditKeysTask(task: TaskRow, db: Db, bucket: string, scope:
   return {
     ok: true,
     repair: await repairMissingAuditKeys(db, scope, bucket, { batchSize: limit }),
+  };
+}
+
+async function repairAuditPrivacyTask(
+  task: TaskRow,
+  db: Db,
+  bucket: string,
+  matcherAddress: string,
+  signMessage: (message: string) => Promise<string>,
+  scope: { chainId: number; dexAddress: string },
+) {
+  const limit = repairLimitFromTask(task);
+  return {
+    ok: true,
+    repair: await repairLegacyAuditObjects(db, {
+      scope,
+      bucket,
+      matcherAddress,
+      signMessage,
+      limit,
+    }),
   };
 }
 

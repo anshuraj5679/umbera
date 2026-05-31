@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forbiddenAuditFields, scanAuditObjectPrivacy } from "./privacy.js";
+import { buildReceiptOnlyAuditBody, forbiddenAuditFields, scanAuditObjectPrivacy } from "./privacy.js";
 
 describe("audit object privacy scanner", () => {
   it("flags legacy schemas and private fields in receipt-v2 objects", async () => {
@@ -69,6 +69,66 @@ describe("audit object privacy scanner", () => {
       outputRoot: "root",
       commitments: { salted: true },
     })).toEqual([]);
+  });
+
+  it("builds receipt-only replacement bodies without private transcript values", () => {
+    const body = buildReceiptOnlyAuditBody({
+      schema: "obsidian.match.proof-receipt.v1",
+      matchId: "42",
+      batchId: "7",
+      pairId: 0,
+      chainId: 421614,
+      dexAddress: "0xdex",
+      orderAId: "9",
+      orderBId: "11",
+      publishTxHash: "0xabc",
+      transcriptDigest: { stored: "old", recomputed: "old", ok: true },
+      matcherSignature: { signer: "0xmatcher", expectedSigner: "0xmatcher", ok: true },
+      checks: {
+        fieldsOk: true,
+        auctionRecomputed: true,
+        auctionOk: true,
+        transcriptSchema: "match-v2-private-auction-inputs",
+        publishedAt: "2026-06-01T00:00:00.000Z",
+      },
+      commitments: {
+        privateInputRoot: "input-root",
+        privateInputCount: 2,
+        outputRoot: "output-root",
+        outputMatchCount: 1,
+        salted: true,
+      },
+    }, {
+      id: 42n,
+      batchId: 7n,
+      pairId: 0,
+      buyOrderId: 11n,
+      sellOrderId: 9n,
+      clearingPriceNum: "3200000000000",
+      baseFilled: "1600000000",
+      quoteFilled: "500000000000000000",
+      publishTxHash: "0xabc",
+      auditS3Key: "pair-0/batch-7/match-42.json",
+    });
+
+    expect(body).toMatchObject({
+      schema: "obsidian.match.proof-receipt.v2",
+      matchId: "42",
+      batchId: "7",
+      orderAId: "9",
+      orderBId: "11",
+      clearingPriceQuotePerBaseScaled: "3200000000000",
+      baseFilled: "1600000000",
+      quoteFilled: "500000000000000000",
+      privateInputRoot: "input-root",
+      outputRoot: "output-root",
+      salted: true,
+      txHash: "0xabc",
+      matcherAddress: "0xmatcher",
+    });
+    expect(JSON.stringify(body)).not.toContain("inputOrders");
+    expect(JSON.stringify(body)).not.toContain("remainingDeposit");
+    expect(JSON.stringify(body)).not.toContain("BUY");
   });
 });
 
