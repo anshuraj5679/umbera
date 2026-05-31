@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { and, eq, gt, lt, lte, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import { agentAccessTokens } from "../db/schema.js";
 import { normalizeDexAddress } from "../orders/lifecycle.js";
@@ -114,6 +114,27 @@ export async function consumeAgentAccessToken(db: Db, input: {
     expiresAt: row.expiresAt,
     remainingUses: Math.max(0, row.maxUses - row.usedCount - 1),
   };
+}
+
+export async function sweepExpiredAgentAccessTokens(db: Db, input?: {
+  chainId?: number;
+  dexAddress?: string;
+}) {
+  const now = new Date();
+  const conditions = [
+    eq(agentAccessTokens.status, "ACTIVE"),
+    lte(agentAccessTokens.expiresAt, now),
+  ];
+  if (typeof input?.chainId === "number") {
+    conditions.push(eq(agentAccessTokens.chainId, input.chainId));
+  }
+  if (input?.dexAddress) {
+    conditions.push(eq(agentAccessTokens.dexAddress, normalizeDexAddress(input.dexAddress)));
+  }
+  const result = await db.update(agentAccessTokens)
+    .set({ status: "EXPIRED", lastUsedAt: now })
+    .where(and(...conditions));
+  return Number((result as any)?.rowCount ?? 0);
 }
 
 export function publicAgentAccessGrant(grant: AgentAccessGrant) {

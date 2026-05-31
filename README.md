@@ -47,6 +47,7 @@ What is live today:
 - Public match and batch audit receipts with salted commitment roots.
 - Receipt-only audit storage: signed proof receipts and salted roots without persisted decrypted auction inputs.
 - Agent order entry path where x402 buys short-lived access, then encrypted trading uses account commitments.
+- Privacy invariant health checks that detect legacy plaintext columns, non-private order side rows, raw access-token storage, and scrub-able task residue.
 
 ## Execution Core
 
@@ -71,6 +72,7 @@ The product is shaped around the hardest parts of confidential execution:
 - Deployed review surface: judges and users can test the product from Vercel instead of relying on local scripts.
 - Agent-native access: automated agents can pay for access separately from encrypted trading identity.
 - Production-grade backend: reorg-aware indexing, retry workers, relayer state, account commitments, and public proof receipts.
+- Runtime privacy guardrails: `/api/health` and operator invariants surface storage regressions before they become silent leaks.
 
 ## Live Proof Surface
 
@@ -96,6 +98,7 @@ Current implementation:
 - x402 payment grants a short-lived access capability; order submission uses account commitments and does not store the payer identity with the order.
 - Public proof receipts expose salted commitment roots, not private values or private salts.
 - Audit objects are receipt-only and do not persist decrypted auction input orders.
+- Invariant checks continuously scan for legacy plaintext order columns, non-`PRIVATE` stored order sides, non-hashed access tokens, and private residue in historical task ledgers.
 
 V1 trust model:
 

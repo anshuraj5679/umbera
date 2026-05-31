@@ -4,6 +4,7 @@ import type { Db } from "../db/client.js";
 import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
 import { createTask, taskByIdempotencyKey } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
+import { countPrivateTaskResidue, type PrivacyResidueCounts } from "../privacy/scrub.js";
 
 export type InvariantSeverity = "BLOCKING" | "WARNING";
 export type InvariantIssue = {
@@ -15,6 +16,8 @@ export type InvariantIssue = {
   indexedOrderCount?: string;
   onChainOrderCount?: string | null;
   taskType?: string;
+  count?: number;
+  columns?: string[];
 };
 
 export type InvariantReport = {
@@ -24,7 +27,19 @@ export type InvariantReport = {
   blockingCount: number;
   warningCount: number;
   issues: InvariantIssue[];
+  privacy: PrivacyPostureReport;
   checkedAt: string;
+};
+
+export type PrivacyPostureReport = {
+  ok: boolean;
+  blockingCount: number;
+  warningCount: number;
+  legacyOrderColumns: string[];
+  nonPrivateOrderSideRows: number;
+  agentAccessTokenHashInvalidRows: number;
+  expiredActiveAccessTokenRows: number;
+  residue: PrivacyResidueCounts;
 };
 
 export async function buildInvariantReport(db: Db, input: {
@@ -37,6 +52,8 @@ export async function buildInvariantReport(db: Db, input: {
   const scope = { chainId: input.chainId, dexAddress: normalizeDexAddress(input.dexAddress) };
   const limit = input.limit ?? 25;
   const issues: InvariantIssue[] = [];
+  const privacy = await buildPrivacyPostureReport(db, scope);
+  addPrivacyIssues(issues, privacy);
 
   const closed = await db.select()
     .from(batchesTable)
@@ -124,6 +141,7 @@ export async function buildInvariantReport(db: Db, input: {
     blockingCount,
     warningCount,
     issues,
+    privacy,
     checkedAt: new Date().toISOString(),
   };
 }
@@ -137,6 +155,15 @@ export async function enqueueInvariantRepairs(db: Db, report: InvariantReport) {
       type: "REPAIR_AUDIT_KEYS",
       scope: "OPERATOR",
       payload: { source: "invariant_reconcile", limit: 100 },
+    }));
+  }
+  const scrubPrivateTaskData = report.issues.some((issue) => issue.taskType === "SCRUB_PRIVATE_TASK_DATA");
+  if (scrubPrivateTaskData) {
+    tasks.push(await createTaskIfMissing(db, {
+      idempotencyKey: `reconcile:${report.chainId}:${report.dexAddress}:scrub-private-task-data`,
+      type: "SCRUB_PRIVATE_TASK_DATA",
+      scope: "OPERATOR",
+      payload: { source: "invariant_reconcile" },
     }));
   }
   for (const issue of report.issues) {
@@ -160,6 +187,162 @@ export async function enqueueInvariantRepairs(db: Db, report: InvariantReport) {
     }
   }
   return { enqueued: tasks.filter(Boolean) };
+}
+
+export async function buildPrivacyPostureReport(db: Db, scope: DeploymentScope): Promise<PrivacyPostureReport> {
+  const [
+    legacyOrderColumns,
+    nonPrivateOrderSideRows,
+    agentAccessTokenHashInvalidRows,
+    expiredActiveAccessTokenRows,
+    residue,
+  ] = await Promise.all([
+    findLegacyOrderColumns(db),
+    countNonPrivateOrderSides(db, scope),
+    countInvalidAgentAccessTokenHashes(db, scope),
+    countExpiredActiveAccessTokens(db, scope),
+    countPrivateTaskResidue(db),
+  ]);
+
+  const blockingCount = [
+    legacyOrderColumns.length > 0,
+    nonPrivateOrderSideRows > 0,
+    agentAccessTokenHashInvalidRows > 0,
+  ].filter(Boolean).length;
+  const warningCount = [
+    residue.agentSubmitOrderTaskRows > 0,
+    residue.taskEventRows > 0,
+    residue.workerErrorRows > 0,
+  ].filter(Boolean).length;
+
+  return {
+    ok: blockingCount === 0,
+    blockingCount,
+    warningCount,
+    legacyOrderColumns,
+    nonPrivateOrderSideRows,
+    agentAccessTokenHashInvalidRows,
+    expiredActiveAccessTokenRows,
+    residue,
+  };
+}
+
+function addPrivacyIssues(issues: InvariantIssue[], privacy: PrivacyPostureReport) {
+  if (privacy.legacyOrderColumns.length > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "LEGACY_PLAINTEXT_ORDER_COLUMNS",
+      message: "Order table still contains legacy plaintext storage columns.",
+      columns: privacy.legacyOrderColumns,
+      count: privacy.legacyOrderColumns.length,
+    });
+  }
+  if (privacy.nonPrivateOrderSideRows > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "ORDER_SIDE_PLAINTEXT_ROWS",
+      message: "Order rows must store side as PRIVATE, not BUY or SELL.",
+      count: privacy.nonPrivateOrderSideRows,
+    });
+  }
+  if (privacy.agentAccessTokenHashInvalidRows > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "AGENT_ACCESS_TOKEN_HASH_INVALID",
+      message: "Agent access tokens must be stored only as sha256 hashes.",
+      count: privacy.agentAccessTokenHashInvalidRows,
+    });
+  }
+  if (privacy.residue.agentSubmitOrderTaskRows > 0) {
+    issues.push({
+      severity: "WARNING",
+      code: "AGENT_TASK_PRIVATE_RESIDUE",
+      message: "Historical agent task payload/result rows contain private request residue and should be scrubbed.",
+      count: privacy.residue.agentSubmitOrderTaskRows,
+      taskType: "SCRUB_PRIVATE_TASK_DATA",
+    });
+  }
+  if (privacy.residue.taskEventRows > 0) {
+    issues.push({
+      severity: "WARNING",
+      code: "TASK_EVENT_PRIVATE_RESIDUE",
+      message: "Historical task event payload rows contain private request residue and should be scrubbed.",
+      count: privacy.residue.taskEventRows,
+      taskType: "SCRUB_PRIVATE_TASK_DATA",
+    });
+  }
+  if (privacy.residue.workerErrorRows > 0) {
+    issues.push({
+      severity: "WARNING",
+      code: "WORKER_ERROR_PRIVATE_RESIDUE",
+      message: "Historical worker error payload rows contain private request residue and should be scrubbed.",
+      count: privacy.residue.workerErrorRows,
+      taskType: "SCRUB_PRIVATE_TASK_DATA",
+    });
+  }
+}
+
+async function findLegacyOrderColumns(db: Db): Promise<string[]> {
+  const rows = await executeRows<{ column_name: string }>(db, sql`
+    select column_name
+    from information_schema.columns
+    where table_schema = current_schema()
+      and table_name = 'orders'
+      and column_name in (
+        'plain_deposit',
+        'plain_request',
+        'remaining_deposit',
+        'remaining_request',
+        'base_amount',
+        'limit_price',
+        'remaining_base'
+      )
+    order by column_name
+  `);
+  return rows.map((row) => row.column_name);
+}
+
+async function countNonPrivateOrderSides(db: Db, scope: DeploymentScope) {
+  return executeCount(db, sql`
+    select count(*)::int as value
+    from orders
+    where chain_id = ${scope.chainId}
+      and lower(dex_address) = ${scope.dexAddress}
+      and side <> 'PRIVATE'
+  `);
+}
+
+async function countInvalidAgentAccessTokenHashes(db: Db, scope: DeploymentScope) {
+  return executeCount(db, sql`
+    select count(*)::int as value
+    from agent_access_tokens
+    where chain_id = ${scope.chainId}
+      and lower(dex_address) = ${scope.dexAddress}
+      and token_hash !~ '^sha256:[0-9a-f]{64}$'
+  `);
+}
+
+async function countExpiredActiveAccessTokens(db: Db, scope: DeploymentScope) {
+  return executeCount(db, sql`
+    select count(*)::int as value
+    from agent_access_tokens
+    where chain_id = ${scope.chainId}
+      and lower(dex_address) = ${scope.dexAddress}
+      and status = 'ACTIVE'
+      and expires_at <= now()
+  `);
+}
+
+async function executeCount(db: Db, query: ReturnType<typeof sql>): Promise<number> {
+  const rows = await executeRows<{ value?: number | string }>(db, query);
+  return Number(rows[0]?.value ?? 0);
+}
+
+async function executeRows<T>(db: Db, query: ReturnType<typeof sql>): Promise<T[]> {
+  const result = await (db as any).execute(query);
+  if (Array.isArray(result)) return result as T[];
+  if (Array.isArray(result?.rows)) return result.rows as T[];
+  return [];
 }
 
 async function createTaskIfMissing(db: Db, input: Parameters<typeof createTask>[1]) {

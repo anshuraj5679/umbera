@@ -573,6 +573,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
           ok: report.ok,
           blockingCount: report.blockingCount,
           warningCount: report.warningCount,
+          privacy: report.privacy,
           issues: report.issues.slice(0, 5),
         };
         if (!report.ok) health.ok = false;

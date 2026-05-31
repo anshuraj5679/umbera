@@ -12,6 +12,7 @@ import { startRetryWorker } from "./workers/retry-worker.js";
 import { initCofhe } from "./fhe/permit.js";
 import { startHttp } from "./http/server.js";
 import { createAgentOrderService } from "./agent/orders.js";
+import { sweepExpiredAgentAccessTokens } from "./agent/access.js";
 import { createAgentX402Middleware } from "./http/x402-agent.js";
 import { getDeployment } from "../../shared/addresses/index.js";
 import { runTask, type TaskRow } from "./tasks/store.js";
@@ -20,6 +21,7 @@ import { and, eq } from "drizzle-orm";
 import { verifyAuditTranscriptFromS3 } from "./audit/verifier.js";
 import { repairMissingAuditKeys, startAuditRepairWorker } from "./audit/repair.js";
 import { reconcileOrderStatusesFromMatches } from "./orders/lifecycle.js";
+import { scrubPrivateTaskResidue } from "./privacy/scrub.js";
 
 async function main() {
   const cfg = await loadConfig();
@@ -82,6 +84,8 @@ async function main() {
     confirmationDepth: cfg.MATCHER_INDEX_CONFIRMATIONS,
   });
   await reconcileOrderStatusesFromMatches(db, deploymentScope);
+  await sweepExpiredAgentAccessTokens(db, deploymentScope);
+  startAgentAccessTokenSweeper(db, deploymentScope);
   await matchClosedBatches(dex, dep.dex, db, dep.pairs as any, auditCtx, 5, batchMatcherOptions);
   startCatchupPoller(
     dex,
@@ -142,6 +146,10 @@ async function main() {
     },
     VERIFY_AUDIT: async (task) => verifyAuditTask(task, db, cfg.S3_BUCKET, chain.wallet.address, deploymentScope),
     REPAIR_AUDIT_KEYS: async (task) => repairAuditKeysTask(task, db, cfg.S3_BUCKET, deploymentScope),
+    SCRUB_PRIVATE_TASK_DATA: async () => ({
+      ok: true,
+      scrub: await scrubPrivateTaskResidue(db),
+    }),
   }, {
     intervalSec: cfg.MATCHER_RETRY_WORKER_INTERVAL_SEC,
     leaseSec: cfg.MATCHER_TASK_LEASE_SEC,
@@ -211,6 +219,20 @@ function repairLimitFromTask(task: TaskRow): number {
   const raw = Number(payload.limit ?? 25);
   if (!Number.isInteger(raw) || raw < 1) return 25;
   return Math.min(raw, 100);
+}
+
+function startAgentAccessTokenSweeper(db: Db, scope: { chainId: number; dexAddress: string }) {
+  const timer = setInterval(async () => {
+    try {
+      const expired = await sweepExpiredAgentAccessTokens(db, scope);
+      if (expired > 0) {
+        console.log("expired agent access tokens swept", expired);
+      }
+    } catch (error) {
+      console.error("agent access token sweep failed:", error instanceof Error ? error.message : String(error));
+    }
+  }, 60_000);
+  timer.unref?.();
 }
 
 function hasEvent(contract: any, name: string): boolean {

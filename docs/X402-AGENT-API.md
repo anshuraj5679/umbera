@@ -138,7 +138,7 @@ If neither x402 nor the bypass token is configured, `POST /agent/access` returns
 - A future SDK is useful when third-party agents need typed helpers, policy simulation, retries, and idempotency handling.
 - This demo uses one delegated trader hot wallet. Market alpha should move to per-agent delegated wallets, session keys, or account-abstraction policies.
 - Agent-order idempotency is persisted through the matcher task ledger. Broader task-backed retry and reconciliation still need to be applied to close, match, publish, settle, and audit workflows.
-- x402 verification happens before order execution; settlement happens around the final response. If settlement fails after a DEX tx succeeds, the agent may receive a settlement error even though the on-chain order exists. Persisted idempotency and reconciliation should be the next hardening step.
+- x402 verification happens before access-token issuance. The DEX order route only accepts the short-lived bearer capability returned by `/agent/access`.
 - If x402 is moved fully onto Arbitrum Sepolia with a custom facilitator, keep the payment token public/plain and separate from encrypted trading balances. Do not use `eUSDC`, `eWETH`, or other encrypted wrappers as x402 payment tokens.
 - Public matcher APIs and public audit artifacts must not expose agent-request side. Side appears only in the private agent request and trusted matcher memory during auction execution.
 
@@ -150,7 +150,7 @@ Dev-bypass order E2E. This starts a local ephemeral HTTP server, calls the real 
 npm --prefix matcher run e2e:agent-order
 ```
 
-x402 challenge E2E. This starts the paid route with x402 enabled and verifies an unpaid agent order receives HTTP `402` plus the official `PAYMENT-REQUIRED` header:
+x402 challenge E2E. This starts the paid route with x402 enabled and verifies unpaid agent access receives HTTP `402` plus the official `PAYMENT-REQUIRED` header:
 
 ```powershell
 npm --prefix matcher run e2e:x402-challenge

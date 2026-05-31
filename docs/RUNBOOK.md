@@ -1,10 +1,31 @@
-# Run Book
+# Runbook
 
 ## Boot
 1. Verify AWS resources via `ENV=prod ./infra/aws/01-create-secrets.sh` (idempotent)
 2. SSH via EC2 Instance Connect (`aws ec2-instance-connect ssh ...`)
 3. Pull latest matcher image; `sudo systemctl restart darkpool-matcher`
 4. Tail logs: `journalctl -u darkpool-matcher -f`
+
+## Health
+
+- Public health: `https://obsidian-darkpool.vercel.app/api/health`
+- Direct matcher health: `http://<matcher-host>:8080/health`
+- Operator invariants: signed `GET /operator/invariants`
+- Operator reconcile: signed `POST /operator/reconcile`
+
+The invariant report is expected to stay `ok: true`. Privacy warnings can be reconciled with `POST /operator/reconcile`; this enqueues `SCRUB_PRIVATE_TASK_DATA` when historical task payload, task event, or worker error residue is detected.
+
+Privacy blockers require immediate investigation:
+
+- `LEGACY_PLAINTEXT_ORDER_COLUMNS`
+- `ORDER_SIDE_PLAINTEXT_ROWS`
+- `AGENT_ACCESS_TOKEN_HASH_INVALID`
+
+For ops-only manual cleanup, run:
+
+```powershell
+npm --prefix matcher run ops:scrub-private-tasks -- --execute
+```
 
 ## Halt
 - `sudo systemctl stop darkpool-matcher`
