@@ -160,6 +160,20 @@ export const taskEvents = pgTable("task_events", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const agentAccessTokens = pgTable("agent_access_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  chainId: integer("chain_id").notNull(),
+  dexAddress: text("dex_address").notNull(),
+  scope: text("scope").notNull(),
+  subjectHash: text("subject_hash"),
+  status: text("status").notNull().default("ACTIVE"),
+  maxUses: integer("max_uses").notNull().default(1),
+  usedCount: integer("used_count").notNull().default(0),
+  issuedAt: timestamp("issued_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+});
+
 export const relayerAccounts = pgTable("relayer_accounts", {
   id: text("id").primaryKey(),
   address: text("address").notNull(),

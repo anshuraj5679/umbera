@@ -4,6 +4,7 @@ import type { Deployment } from "../../../shared/addresses/index.js";
 
 const numericString = z.string().trim().regex(/^\d+(\.\d+)?$/);
 const sideValues = ["BUY", "SELL"] as const;
+const DEFAULT_DRY_RUN_ACCOUNT_COMMITMENT = "0x1111111111111111111111111111111111111111111111111111111111111111";
 
 export const makerProfileSchema = z.object({
   pairId: z.number().int().nonnegative(),
@@ -51,6 +52,7 @@ export type MakerPlanOptions = {
   seed?: string;
   runId?: string;
   maxOrdersPerBatch?: number;
+  sessionAccountCommitment?: string;
 };
 
 export class MakerPlanError extends Error {
@@ -130,6 +132,7 @@ export function planMakerBatch(options: MakerPlanOptions): MakerPlan {
   }
 
   const rng = seededRng(seed);
+  const sessionAccountCommitment = normalizeAccountCommitment(options.sessionAccountCommitment ?? DEFAULT_DRY_RUN_ACCOUNT_COMMITMENT);
   const orders: PlannedMakerOrder[] = [];
   let totalNotionalRaw = 0n;
   let totalNotionalDecimals = 6;
@@ -163,6 +166,7 @@ export function planMakerBatch(options: MakerPlanOptions): MakerPlan {
           seed,
           runId,
           rng,
+          sessionAccountCommitment,
         });
         const amounts = buildOrderAmounts({
           side,
@@ -208,6 +212,7 @@ function buildPlannedOrder(args: {
   seed: string;
   runId: string;
   rng: () => number;
+  sessionAccountCommitment: string;
 }): Omit<PlannedMakerOrder, "notionalUSDC"> {
   const priceRaw = planPriceRaw(args);
   const sizeRaw = planSizeRaw(args);
@@ -230,6 +235,7 @@ function buildPlannedOrder(args: {
     expiryHours: args.profile.expiryHours,
     clientOrderId: `${args.runId}-p${args.pair.id}-l${args.level + 1}-${role}`,
     agent: "obsidian-maker-bot",
+    sessionAccountCommitment: args.sessionAccountCommitment,
     pairLabel: pairLabel(args.pair),
     baseSymbol: cleanSymbol(args.pair.base.symbol),
     quoteSymbol: cleanSymbol(args.pair.quote.symbol),
@@ -237,6 +243,13 @@ function buildPlannedOrder(args: {
     role,
     reason: `${args.profile.mode} ${role} level ${args.level + 1} seed ${args.seed}`,
   };
+}
+
+function normalizeAccountCommitment(value: string) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new MakerPlanError("invalid_session_account_commitment", "sessionAccountCommitment must be a bytes32 hex value.");
+  }
+  return value.toLowerCase();
 }
 
 function planPriceRaw(args: {

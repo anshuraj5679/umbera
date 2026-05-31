@@ -45,8 +45,8 @@ What is live today:
 - Autonomous matcher workers for batch close, match, settlement retry, catchup, and health reporting.
 - Market candles built only from settled matches.
 - Public match and batch audit receipts with salted commitment roots.
-- Audit transcript repair for deterministic proof recovery when indexed metadata lags object storage.
-- Agent order entry path for x402-gated integrations without making the encrypted trading token public.
+- Receipt-only audit storage: signed proof receipts and salted roots without persisted decrypted auction inputs.
+- Agent order entry path where x402 buys short-lived access, then encrypted trading uses account commitments.
 
 ## Execution Core
 
@@ -67,9 +67,9 @@ The product is shaped around the hardest parts of confidential execution:
 
 - Confidential intent: side, size, price, and remaining amount stay out of public calldata and backend plaintext storage.
 - Batch fairness: orders clear through uniform batch auctions rather than public mempool racing.
-- Auditability without disclosure: receipts prove transcript integrity, matcher signature validity, auction recomputation, and salted input/output roots.
+- Auditability without disclosure: receipts prove matcher signature validity, indexed tx consistency, and salted input/output roots.
 - Deployed review surface: judges and users can test the product from Vercel instead of relying on local scripts.
-- Agent-native access: automated agents can pay for access separately from encrypted trading settlement.
+- Agent-native access: automated agents can pay for access separately from encrypted trading identity.
 - Production-grade backend: reorg-aware indexing, retry workers, relayer state, account commitments, and public proof receipts.
 
 ## Live Proof Surface
@@ -93,13 +93,15 @@ Current implementation:
 - The matcher decrypts order legs only in process memory for auction execution.
 - The order database stores ciphertext handles and public lifecycle metadata.
 - The order database does not store plaintext `side`, `baseAmount`, `limitPrice`, or `remainingBase`.
+- x402 payment grants a short-lived access capability; order submission uses account commitments and does not store the payer identity with the order.
 - Public proof receipts expose salted commitment roots, not private values or private salts.
+- Audit objects are receipt-only and do not persist decrypted auction input orders.
 
 V1 trust model:
 
 - Obsidian V1 uses a trusted matcher.
 - Order values are hidden publicly, but the authorized matcher decrypts for auction execution.
-- Audit transcripts and proof receipts verify what the matcher did.
+- Signed proof receipts verify indexed match fields, matcher signatures, tx hashes, and salted roots.
 - This alpha does not claim decentralized matching or ZK fairness proofs.
 
 ## System Map
@@ -155,11 +157,11 @@ npm --prefix matcher run build
 npm --prefix shared test
 ```
 
-Current deployed proof slice has been verified with:
+Current deployed proof slice should be verified with:
 
 - Vercel health returning `ok: true`
 - Direct matcher health returning `ok: true`
-- Match audit receipt returning `obsidian.match.proof-receipt.v1`
+- Match audit receipt returning `obsidian.match.proof-receipt.v2`
 - Batch audit receipt returning `obsidian.batch.proof-receipt.v1`
 - Salted private input and output roots present for the live proof batch
 

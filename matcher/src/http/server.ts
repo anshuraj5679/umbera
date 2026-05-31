@@ -17,6 +17,13 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { verifySignedHeader } from "./auth.js";
 import type { AgentOrderService } from "../agent/orders.js";
 import {
+  consumeAgentAccessToken,
+  extractBearerToken,
+  issueAgentAccessToken,
+  publicAgentAccessGrant,
+  type AgentAccessError,
+} from "../agent/access.js";
+import {
   createSessionAccountSchema,
   publicSessionAccountRow,
   recentSessionAccounts,
@@ -54,12 +61,16 @@ import {
   taskEventsByTaskId,
 } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
+import { buildInvariantReport, enqueueInvariantRepairs } from "../ops/invariants.js";
 
 export type AgentHttpApi = {
   orderService: AgentOrderService;
   paymentMiddleware?: RequestHandler;
   x402Enabled: boolean;
   devBypassToken?: string;
+  accessTokenSecret?: string;
+  accessTokenTtlSec: number;
+  accessMaxUses: number;
 };
 
 export type MatcherHttpContext = {
@@ -111,12 +122,40 @@ export function startHttp(
     res.json(agentApi.orderService.capabilities());
   });
   if (agentApi) {
-    const middlewares = [
+    const accessMiddlewares = [
       agentApi.paymentMiddleware,
-      requireAgentAccess(agentApi),
+      requireAgentAccessPurchase(agentApi),
     ].filter(Boolean) as RequestHandler[];
-    app.post("/agent/orders", ...middlewares, async (req, res) => {
+    app.post("/agent/access", ...accessMiddlewares, async (req, res) => {
+      if (!agentApi.accessTokenSecret) {
+        return res.status(503).json({ error: "agent access is not configured", code: "agent_access_unconfigured" });
+      }
       try {
+        const scope = activeScope(httpCtx) ?? {
+          chainId: 421614,
+          dexAddress: normalizeDexAddress(getDeployment(421614).dex),
+        };
+        const grant = await issueAgentAccessToken(db, {
+          secret: agentApi.accessTokenSecret,
+          chainId: scope.chainId,
+          dexAddress: scope.dexAddress,
+          ttlSec: agentApi.accessTokenTtlSec,
+          maxUses: agentApi.accessMaxUses,
+          subjectHash: agentAccessSubjectHash(req),
+        });
+        res.status(201).json(publicAgentAccessGrant(grant));
+      } catch (error) {
+        sendAgentAccessError(res, error);
+      }
+    });
+    app.post("/agent/orders", requireAgentOrderToken(db, agentApi, httpCtx), async (req, res) => {
+      try {
+        if (!req.body?.sessionAccountCommitment) {
+          return res.status(400).json({
+            error: "sessionAccountCommitment is required for agent orders",
+            code: "session_account_required",
+          });
+        }
         const { task, result, replayed } = await runTask(db, {
           type: "AGENT_SUBMIT_ORDER",
           scope: "AGENT",
@@ -129,7 +168,7 @@ export function startHttp(
           ...result,
           taskId: task.id,
           replayed,
-          paymentMode: agentApi.x402Enabled ? "x402" : "dev-bypass",
+          accessMode: "bearer-capability",
         });
       } catch (error) {
         sendAgentOrderError(res, error);
@@ -344,6 +383,16 @@ export function startHttp(
   app.get("/operator/relayer/state", verifySignedHeader(matcherAddress), async (_req, res) => {
     res.json(await buildRelayerStateStatus(db, httpCtx));
   });
+  app.get("/operator/invariants", verifySignedHeader(matcherAddress), async (_req, res) => {
+    if (!httpCtx) return res.status(503).json({ error: "matcher context is not configured", code: "matcher_context_missing" });
+    res.json(await buildInvariantReport(db, invariantInput(httpCtx)));
+  });
+  app.post("/operator/reconcile", verifySignedHeader(matcherAddress), async (_req, res) => {
+    if (!httpCtx) return res.status(503).json({ error: "matcher context is not configured", code: "matcher_context_missing" });
+    const report = await buildInvariantReport(db, invariantInput(httpCtx));
+    const repairs = await enqueueInvariantRepairs(db, report);
+    res.json({ ok: report.ok, report, repairs });
+  });
   app.post("/operator/session-accounts", verifySignedHeader(matcherAddress), async (req, res) => {
     const parsed = createSessionAccountSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -434,6 +483,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
       ok: null,
       missingTranscriptKeyCount: null,
     },
+    invariants: null,
     currentBatch: null,
     closedBatchesWaitingForMatch: [],
     pendingMatchesPastDisputeWindow: [],
@@ -514,6 +564,21 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
   }
 
   if (health.db.ok) {
+    if (httpCtx) {
+      try {
+        const report = await buildInvariantReport(db, invariantInput(httpCtx, 10));
+        health.invariants = {
+          ok: report.ok,
+          blockingCount: report.blockingCount,
+          warningCount: report.warningCount,
+          issues: report.issues.slice(0, 5),
+        };
+        if (!report.ok) health.ok = false;
+      } catch (error) {
+        health.invariantReadError = errorMessage(error);
+      }
+    }
+
     try {
       const closedRows = await db.select()
         .from(batchesTable)
@@ -662,6 +727,16 @@ function activeScope(httpCtx?: MatcherHttpContext): DeploymentScope | null {
   return {
     chainId: httpCtx.chainId,
     dexAddress: normalizeDexAddress(httpCtx.dexAddress),
+  };
+}
+
+function invariantInput(httpCtx: MatcherHttpContext, limit?: number) {
+  return {
+    dex: httpCtx.dex,
+    chainId: httpCtx.chainId,
+    dexAddress: httpCtx.dexAddress,
+    disputeWindowSec: httpCtx.disputeWindowSec,
+    limit,
   };
 }
 
@@ -846,7 +921,7 @@ export function publicMatchRow(row: any) {
   };
 }
 
-function requireAgentAccess(agentApi: AgentHttpApi): RequestHandler {
+function requireAgentAccessPurchase(agentApi: AgentHttpApi): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     if (agentApi.x402Enabled) return next();
     if (!agentApi.devBypassToken) {
@@ -863,6 +938,50 @@ function requireAgentAccess(agentApi: AgentHttpApi): RequestHandler {
     }
     next();
   };
+}
+
+function requireAgentOrderToken(db: Db, agentApi: AgentHttpApi, httpCtx?: MatcherHttpContext): RequestHandler {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!agentApi.accessTokenSecret) {
+      return res.status(503).json({
+        error: "agent access is not configured",
+        code: "agent_access_unconfigured",
+      });
+    }
+    const scope = activeScope(httpCtx) ?? {
+      chainId: 421614,
+      dexAddress: normalizeDexAddress(getDeployment(421614).dex),
+    };
+    try {
+      await consumeAgentAccessToken(db, {
+        token: extractBearerToken(req.header("authorization")),
+        secret: agentApi.accessTokenSecret,
+        chainId: scope.chainId,
+        dexAddress: scope.dexAddress,
+      });
+      next();
+    } catch (error) {
+      sendAgentAccessError(res, error);
+    }
+  };
+}
+
+function agentAccessSubjectHash(req: Request) {
+  const agent = typeof req.body?.agent === "string" ? req.body.agent : null;
+  if (agent) return hashPrivateValue(agent);
+  const payment = req.header("x-payment") ?? req.header("x-agent-bypass-token");
+  return payment ? hashPrivateValue(payment) : null;
+}
+
+function sendAgentAccessError(res: Response, error: unknown) {
+  if (isAgentAccessError(error)) {
+    return res.status(error.statusCode).json({
+      error: redactErrorMessage(error.message),
+      code: error.code,
+    });
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return res.status(500).json({ error: redactErrorMessage(message), code: "agent_access_failed" });
 }
 
 function sendAgentOrderError(res: Response, error: unknown) {
@@ -893,6 +1012,14 @@ function sendAuditVerificationError(res: Response, error: unknown) {
   }
   const message = error instanceof Error ? error.message : String(error);
   return res.status(500).json({ error: message, code: "audit_verification_failed" });
+}
+
+function isAgentAccessError(error: unknown): error is AgentAccessError {
+  if (!(error instanceof Error)) return false;
+  const candidate = error as Error & { statusCode?: unknown; code?: unknown };
+  return error.name === "AgentAccessError"
+    && typeof candidate.statusCode === "number"
+    && typeof candidate.code === "string";
 }
 
 function isAuditVerificationError(error: unknown): error is AuditVerificationError {

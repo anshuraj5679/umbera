@@ -238,4 +238,57 @@ describe("audit verifier", () => {
     expect(JSON.stringify(result.proofReceipt)).not.toContain("BUY");
     expect(JSON.stringify(result.proofReceipt)).not.toContain("0123456789abcdef");
   });
+
+  it("verifies receipt-only audit objects without decrypted auction inputs", async () => {
+    const wallet = Wallet.createRandom();
+    const body = {
+      schema: "obsidian.match.proof-receipt.v2",
+      matchId: "42",
+      batchId: "7",
+      pairId: 0,
+      matchIndex: 0,
+      orderAId: "9",
+      orderBId: "11",
+      auctionAlgorithm: "uniform-clearing-v1",
+      clearingPriceQuotePerBaseScaled: "3200000000000",
+      baseFilled: "1600000000",
+      quoteFilled: "500000000000000000",
+      privateInputRoot: digest({ schema: "test.private-input-root", value: "committed-only" }),
+      privateInputCount: 2,
+      outputRoot: digest({ schema: "test.output-root", value: "committed-only" }),
+      outputMatchCount: 1,
+      salted: true,
+      publishedAt: "2026-05-26T00:00:00.000Z",
+      txHash: "0xabc123",
+      matcherAddress: wallet.address,
+    };
+    const d = digest(body);
+
+    const result = verifyAuditTranscript({
+      bucket: "audit-bucket",
+      key: "pair-0/batch-7/match-42.json",
+      transcript: {
+        ...body,
+        digest: d,
+        signature: await wallet.signMessage(d),
+      },
+      match,
+      matcherAddress: wallet.address,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.auction).toMatchObject({ recomputed: false, ok: null });
+    expect(result.transcript.schema).toBe("receipt-v2");
+    expect(result.proofReceipt.schema).toBe("obsidian.match.proof-receipt.v2");
+    expect(result.proofReceipt.commitments).toEqual({
+      privateInputRoot: body.privateInputRoot,
+      privateInputCount: 2,
+      outputRoot: body.outputRoot,
+      outputMatchCount: 1,
+      salted: true,
+    });
+    expect(JSON.stringify(result)).not.toContain("inputOrders");
+    expect(JSON.stringify(result)).not.toContain("remainingDeposit");
+    expect(JSON.stringify(result)).not.toContain("BUY");
+  });
 });

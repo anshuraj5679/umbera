@@ -21,7 +21,7 @@ export type AuditMatchRow = {
 };
 
 export type AuditProofReceipt = {
-  schema: "obsidian.match.proof-receipt.v1";
+  schema: "obsidian.match.proof-receipt.v1" | "obsidian.match.proof-receipt.v2";
   matchId: string;
   batchId: string;
   pairId: number;
@@ -44,7 +44,7 @@ export type AuditProofReceipt = {
     fieldsOk: boolean;
     auctionRecomputed: boolean;
     auctionOk: boolean | null;
-    transcriptSchema: "match-v2-private-auction-inputs" | "match-v1" | "legacy-or-unknown";
+    transcriptSchema: "match-v2-private-auction-inputs" | "match-v1" | "receipt-v2" | "legacy-or-unknown";
     publishedAt: string | null;
   };
   commitments: {
@@ -101,7 +101,7 @@ export type AuditVerificationResult = {
     reason: string;
   };
   transcript: {
-    schema: "match-v2-private-auction-inputs" | "match-v1" | "legacy-or-unknown";
+    schema: "match-v2-private-auction-inputs" | "match-v1" | "receipt-v2" | "legacy-or-unknown";
     publishedAt: string | null;
   };
   proofReceipt: AuditProofReceipt;
@@ -399,7 +399,9 @@ function buildProofReceipt(input: {
   const ids = neutralOrderIds(input.match);
   const commitments = proofCommitments(input.transcript, input.match);
   return {
-    schema: "obsidian.match.proof-receipt.v1",
+    schema: transcriptSchema(input.transcript) === "receipt-v2"
+      ? "obsidian.match.proof-receipt.v2"
+      : "obsidian.match.proof-receipt.v1",
     matchId: input.match.id.toString(),
     batchId: input.match.batchId.toString(),
     pairId: input.match.pairId,
@@ -430,6 +432,15 @@ function buildProofReceipt(input: {
 }
 
 function proofCommitments(transcript: Record<string, unknown>, match: AuditMatchRow): AuditProofReceipt["commitments"] {
+  if (transcriptSchema(transcript) === "receipt-v2") {
+    return {
+      privateInputRoot: nullableStringField(transcript, "privateInputRoot"),
+      privateInputCount: numberField(transcript, "privateInputCount"),
+      outputRoot: nullableStringField(transcript, "outputRoot"),
+      outputMatchCount: numberField(transcript, "outputMatchCount"),
+      salted: transcript.salted === true,
+    };
+  }
   const auction = objectField(transcript, "auction");
   const inputOrders = auction ? arrayField(auction, "inputOrders") : null;
   const outputMatches = auction ? arrayField(auction, "matches") : null;
@@ -525,6 +536,7 @@ function normalizeHex(value: string | null | undefined) {
 
 function transcriptSchema(transcript: Record<string, unknown>): AuditVerificationResult["transcript"]["schema"] {
   const schema = stringField(transcript, "schema");
+  if (schema === "obsidian.match.proof-receipt.v2") return "receipt-v2";
   if (schema === "match-v2-private-auction-inputs") return schema;
   if (stringField(transcript, "orderAId") && stringField(transcript, "orderBId")) return "match-v1";
   return "legacy-or-unknown";

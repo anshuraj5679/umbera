@@ -84,6 +84,7 @@ export function toAgentOrderRequest(order: PlannedMakerOrder): AgentOrderRequest
     expiryHours: order.expiryHours,
     clientOrderId: order.clientOrderId,
     agent: order.agent,
+    sessionAccountCommitment: order.sessionAccountCommitment,
   };
 }
 

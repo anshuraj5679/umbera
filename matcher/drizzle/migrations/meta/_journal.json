@@ -71,6 +71,13 @@
       "when": 1779915600000,
       "tag": "0009_batch_proof_anchors",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780219200000,
+      "tag": "0010_agent_access_tokens",
+      "breakpoints": true
     }
   ]
 }

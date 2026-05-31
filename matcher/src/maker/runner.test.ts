@@ -83,6 +83,7 @@ describe("maker runner", () => {
       expiryHours: 1,
       clientOrderId: "run-live-p2-l1-bid",
       agent: "obsidian-maker-bot",
+      sessionAccountCommitment: "0x1111111111111111111111111111111111111111111111111111111111111111",
     });
     expect(Object.keys(seen[0]!)).not.toContain("pairLabel");
   });

@@ -22,6 +22,7 @@ if (!fallbackTraderKey) {
 process.env.AGENT_TRADER_PRIVATE_KEY = fallbackTraderKey;
 process.env.X402_AGENT_ENABLED = "false";
 process.env.AGENT_ORDER_DEV_BYPASS_TOKEN ||= `local-e2e-${randomBytes(16).toString("hex")}`;
+process.env.AGENT_ACCESS_TOKEN_SECRET ||= `local-access-${randomBytes(16).toString("hex")}`;
 process.env.AGENT_ORDER_MAX_NOTIONAL_USDC ||= "10";
 process.env.AGENT_ORDER_MAX_EXPIRY_HOURS ||= "1";
 
@@ -33,6 +34,7 @@ const requestBody = {
   expiryHours: 1,
   clientOrderId: `local-e2e-${Date.now()}`,
   agent: "local-e2e",
+  sessionAccountCommitment: process.env.AGENT_E2E_SESSION_ACCOUNT_COMMITMENT ?? "0x1111111111111111111111111111111111111111111111111111111111111111",
 };
 
 async function main() {
@@ -45,6 +47,9 @@ async function main() {
     orderService,
     x402Enabled: false,
     devBypassToken: cfg.AGENT_ORDER_DEV_BYPASS_TOKEN,
+    accessTokenSecret: cfg.AGENT_ACCESS_TOKEN_SECRET,
+    accessTokenTtlSec: cfg.AGENT_ACCESS_TOKEN_TTL_SEC,
+    accessMaxUses: cfg.AGENT_ACCESS_MAX_USES,
   });
   if (!server.listening) await once(server, "listening");
 
@@ -56,11 +61,24 @@ async function main() {
       throw new Error(`agent capabilities invalid: ${JSON.stringify(capabilities)}`);
     }
 
-    const response = await fetch(`${baseUrl}/agent/orders`, {
+    const accessResponse = await fetch(`${baseUrl}/agent/access`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         "x-agent-bypass-token": cfg.AGENT_ORDER_DEV_BYPASS_TOKEN!,
+      },
+      body: JSON.stringify({ agent: requestBody.agent }),
+    });
+    const accessBody = await accessResponse.json().catch(() => ({}));
+    if (!accessResponse.ok || !accessBody.accessToken) {
+      throw new Error(`agent access E2E failed: HTTP ${accessResponse.status} ${JSON.stringify(accessBody)}`);
+    }
+
+    const response = await fetch(`${baseUrl}/agent/orders`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessBody.accessToken}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -75,7 +93,7 @@ async function main() {
       orderId: body.orderId,
       batchId: body.batchId,
       pairId: body.pairId,
-      paymentMode: body.paymentMode,
+      accessMode: body.accessMode,
     }, null, 2));
   } finally {
     await new Promise<void>((resolve, reject) => {

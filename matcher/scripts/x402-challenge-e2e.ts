@@ -27,6 +27,7 @@ process.env.X402_AGENT_ENABLED = "true";
 process.env.X402_AGENT_NETWORK ||= "eip155:84532";
 process.env.X402_AGENT_FACILITATOR_URL ||= "https://x402.org/facilitator";
 process.env.X402_AGENT_PRICE ||= "$0.01";
+process.env.AGENT_ACCESS_TOKEN_SECRET ||= "local-x402-access-secret";
 process.env.AGENT_ORDER_MAX_NOTIONAL_USDC ||= "10";
 process.env.AGENT_ORDER_MAX_EXPIRY_HOURS ||= "1";
 
@@ -39,21 +40,19 @@ async function main() {
     orderService,
     paymentMiddleware: createAgentX402Middleware(cfg),
     x402Enabled: true,
+    accessTokenSecret: cfg.AGENT_ACCESS_TOKEN_SECRET,
+    accessTokenTtlSec: cfg.AGENT_ACCESS_TOKEN_TTL_SEC,
+    accessMaxUses: cfg.AGENT_ACCESS_MAX_USES,
   });
   if (!server.listening) await once(server, "listening");
 
   try {
     const address = server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
-    const response = await fetch(`${baseUrl}/agent/orders`, {
+    const response = await fetch(`${baseUrl}/agent/access`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        pairId: 0,
-        side: "BUY",
-        size: "0.000001",
-        limitPrice: "1",
-      }),
+      body: JSON.stringify({ agent: "local-x402-e2e" }),
     });
     const body = await response.json().catch(() => ({}));
     if (response.status !== 402) {

@@ -5,6 +5,7 @@ import { matchBatch } from "../matching/runner.js";
 import { encryptUint128 } from "../matching/encode.js";
 import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
 import { writeAuditLog } from "../audit/s3.js";
+import { digest } from "../audit/signer.js";
 import { anchorBatchProof } from "../audit/batch.js";
 import { and, asc, eq, sql } from "drizzle-orm";
 import cron from "node-cron";
@@ -158,25 +159,35 @@ export async function onBatchClosed(
           const publishedAt = new Date();
           let auditKey: string | null = `pair-${p.id}/batch-${batchId}/match-${matchId}.json`;
           try {
+            const privateProofSalt = randomBytes(32).toString("hex");
+            const inputOrders = res.inputOrders.map(serializeDecryptedOrder);
+            const outputMatches = res.matches.map(serializeAuctionMatch);
             await writeAuditLog(auditCtx.bucket, auditKey, {
-              schema: "match-v2-private-auction-inputs",
-              privateProofSalt: randomBytes(32).toString("hex"),
+              schema: "obsidian.match.proof-receipt.v2",
               matchId: matchId.toString(),
               batchId: batchId.toString(),
               pairId: p.id,
               matchIndex: i,
               orderAId: flow.orderAId.toString(),
               orderBId: flow.orderBId.toString(),
+              auctionAlgorithm: "uniform-clearing-v1",
               clearingPriceQuotePerBase: res.clearingPriceQuotePerBase.toString(),
               clearingPriceQuotePerBaseScaled: res.clearingPriceQuotePerBaseScaled.toString(),
               baseFilled: m.cashAmount.toString(),
               quoteFilled: m.assetAmount.toString(),
-              auction: {
-                cashDecimals: p.base.decimals,
-                assetDecimals: p.quote.decimals,
-                inputOrders: res.inputOrders.map(serializeDecryptedOrder),
-                matches: res.matches.map(serializeAuctionMatch),
-              },
+              privateInputRoot: digest({
+                schema: "obsidian.audit.private-input-root.v1",
+                privateProofSalt,
+                inputOrders,
+              }),
+              privateInputCount: inputOrders.length,
+              outputRoot: digest({
+                schema: "obsidian.audit.output-root.v1",
+                privateProofSalt,
+                matches: outputMatches,
+              }),
+              outputMatchCount: outputMatches.length,
+              salted: true,
               publishedAt: publishedAt.toISOString(),
               txHash: rcpt.hash,
               matcherAddress: auditCtx.matcherAddress,

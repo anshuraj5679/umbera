@@ -46,6 +46,9 @@ const envSchema = z.object({
   X402_AGENT_PAY_TO: optionalEnv(evmAddress),
   X402_AGENT_RESOURCE_URL: optionalEnv(z.string().url()),
   X402_AGENT_SYNC_FACILITATOR_ON_START: envBool.default(true),
+  AGENT_ACCESS_TOKEN_SECRET: optionalEnv(z.string().min(16)),
+  AGENT_ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(30).max(86_400).default(600),
+  AGENT_ACCESS_MAX_USES: z.coerce.number().int().min(1).max(100).default(1),
   AGENT_TRADER_PRIVATE_KEY: optionalEnv(privateKey),
   AGENT_ORDER_DEV_BYPASS_TOKEN: optionalEnv(z.string().min(12)),
   AGENT_ORDER_IDEMPOTENCY_SECRET: optionalEnv(z.string().min(16)),
@@ -62,6 +65,18 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["AGENT_ORDER_IDEMPOTENCY_SECRET"],
       message: "AGENT_ORDER_IDEMPOTENCY_SECRET is required in production when agent orders are enabled.",
+    });
+  }
+  if (
+    env.NODE_ENV === "production" &&
+    (env.X402_AGENT_ENABLED || env.AGENT_ORDER_DEV_BYPASS_TOKEN) &&
+    !env.AGENT_ACCESS_TOKEN_SECRET &&
+    !env.AGENT_ORDER_IDEMPOTENCY_SECRET
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["AGENT_ACCESS_TOKEN_SECRET"],
+      message: "AGENT_ACCESS_TOKEN_SECRET or AGENT_ORDER_IDEMPOTENCY_SECRET is required in production when agent access is enabled.",
     });
   }
 });

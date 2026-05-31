@@ -26,6 +26,7 @@ async function main() {
   const maxOrdersPerBatch = parsePositiveInt(valueOf(args, "--max-orders") ?? process.env.MAKER_BOT_MAX_ORDERS ?? "8", "max orders");
   const levelsOverride = optionalPositiveInt(valueOf(args, "--levels") ?? process.env.MAKER_BOT_LEVELS, "levels");
   const pairFilter = parsePairFilter(valueOf(args, "--pairs") ?? process.env.MAKER_BOT_PAIRS);
+  const sessionAccountCommitment = valueOf(args, "--session-account") ?? process.env.MAKER_BOT_SESSION_ACCOUNT_COMMITMENT;
 
   const profiles = loadProfiles(args, mode)
     .map((profile) => ({ ...profile, mode, ...(levelsOverride ? { levels: levelsOverride } : {}) }))
@@ -53,6 +54,7 @@ async function main() {
     seed,
     runId,
     maxOrdersPerBatch,
+    sessionAccountCommitment,
     dryRun,
     submitter,
   });

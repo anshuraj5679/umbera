@@ -119,7 +119,11 @@ async function main() {
     dexAddress: deploymentScope.dexAddress,
   });
   startBatchMatcher(dex, dep.dex, db, dep.pairs as any, auditCtx, batchMatcherOptions);
-  startSettler(dex, db, disputeWindow, deploymentScope);
+  const settlementProofCtx = {
+    auditBucket: cfg.S3_BUCKET,
+    matcherAddress: chain.wallet.address,
+  };
+  startSettler(dex, db, disputeWindow, deploymentScope, settlementProofCtx);
   startAuditRepairWorker(db, deploymentScope, cfg.S3_BUCKET, {
     intervalSec: cfg.MATCHER_AUDIT_REPAIR_INTERVAL_SEC,
   });
@@ -134,7 +138,7 @@ async function main() {
     },
     SETTLE_MATCH: async (task) => {
       if (!task.matchId) throw new Error("SETTLE_MATCH task missing matchId");
-      return settleOneMatch(dex, db, task.matchId, deploymentScope);
+      return settleOneMatch(dex, db, task.matchId, deploymentScope, settlementProofCtx);
     },
     VERIFY_AUDIT: async (task) => verifyAuditTask(task, db, cfg.S3_BUCKET, chain.wallet.address, deploymentScope),
     REPAIR_AUDIT_KEYS: async (task) => repairAuditKeysTask(task, db, cfg.S3_BUCKET, deploymentScope),
@@ -150,6 +154,9 @@ async function main() {
     paymentMiddleware: createAgentX402Middleware(cfg),
     x402Enabled: cfg.X402_AGENT_ENABLED,
     devBypassToken: cfg.AGENT_ORDER_DEV_BYPASS_TOKEN,
+    accessTokenSecret: cfg.AGENT_ACCESS_TOKEN_SECRET ?? cfg.AGENT_ORDER_IDEMPOTENCY_SECRET ?? cfg.AGENT_ORDER_DEV_BYPASS_TOKEN,
+    accessTokenTtlSec: cfg.AGENT_ACCESS_TOKEN_TTL_SEC,
+    accessMaxUses: cfg.AGENT_ACCESS_MAX_USES,
   }, {
     dex,
     dexAddress: dep.dex,

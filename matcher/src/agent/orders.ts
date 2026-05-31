@@ -33,7 +33,7 @@ export const agentOrderRequestSchema = z.object({
   expiryHours: z.coerce.number().int().min(1).optional(),
   clientOrderId: z.string().trim().min(1).max(80).optional(),
   agent: z.string().trim().min(1).max(120).optional(),
-  sessionAccountCommitment: z.string().regex(/^0x[0-9a-fA-F]{64}$/).optional(),
+  sessionAccountCommitment: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
 }).strict();
 
 export type AgentOrderRequest = z.infer<typeof agentOrderRequestSchema>;
@@ -130,6 +130,7 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
         orderRequest: {
           method: "POST",
           path: "/agent/orders",
+          authorization: "Bearer access token from POST /agent/access",
           body: {
             pairId: "number",
             side: "BUY | SELL",
@@ -138,7 +139,7 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
             expiryHours: "optional integer",
             clientOrderId: "optional string",
             agent: "optional string",
-            sessionAccountCommitment: "optional bytes32 account commitment",
+            sessionAccountCommitment: "required bytes32 account commitment",
           },
         },
       };
@@ -184,10 +185,8 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
       await ensureOperator(publicClient, walletClient, account, deployment.dex, pair.quote.address as Address);
 
       const runtime = await cofheRuntime();
-      const accountCommitment = request.sessionAccountCommitment?.toLowerCase() as Hex | undefined;
-      if (accountCommitment) {
-        await ensureSessionAuthorized(publicClient, walletClient, account, deployment.dex, accountCommitment);
-      }
+      const accountCommitment = request.sessionAccountCommitment.toLowerCase() as Hex;
+      await ensureSessionAuthorized(publicClient, walletClient, account, deployment.dex, accountCommitment);
       const encrypted = await runtime.cofhe.encryptInputs([
         runtime.Encryptable.uint128(amounts.baseDepositRaw),
         runtime.Encryptable.uint128(amounts.quoteDepositRaw),
@@ -204,25 +203,16 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
         chain: arbitrumSepolia,
         address: deployment.dex,
         abi: dexAbi,
-        functionName: accountCommitment ? "submitOrderForAccount" : "submitOrder",
-        args: accountCommitment
-          ? [
-            accountCommitment,
-            BigInt(pair.id),
-            encBaseDeposit,
-            encQuoteDeposit,
-            encBaseRequest,
-            encQuoteRequest,
-            expiry,
-          ]
-          : [
-            BigInt(pair.id),
-            encBaseDeposit,
-            encQuoteDeposit,
-            encBaseRequest,
-            encQuoteRequest,
-            expiry,
-          ],
+        functionName: "submitOrderForAccount",
+        args: [
+          accountCommitment,
+          BigInt(pair.id),
+          encBaseDeposit,
+          encQuoteDeposit,
+          encBaseRequest,
+          encQuoteRequest,
+          expiry,
+        ],
         gas: 6_000_000n,
         ...(await txFees(publicClient)),
       });
@@ -244,7 +234,7 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
         batchId: submitted.batchId.toString(),
         pairId: pair.id,
         expiry: expiry.toString(),
-        ...(submitted.accountCommitment ? { accountCommitment: submitted.accountCommitment } : {}),
+        accountCommitment: submitted.accountCommitment ?? accountCommitment,
       };
     },
   };

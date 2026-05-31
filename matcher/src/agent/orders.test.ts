@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentOrderError, buildOrderAmounts, toUnits } from "./orders.js";
+import { AgentOrderError, agentOrderRequestSchema, buildOrderAmounts, toUnits } from "./orders.js";
 import type { Deployment } from "../../../shared/addresses/index.js";
 
 const pair: Deployment["pairs"][number] = {
@@ -9,6 +9,25 @@ const pair: Deployment["pairs"][number] = {
 };
 
 describe("agent order amount builder", () => {
+  it("requires a session account commitment for agent orders", () => {
+    const missing = agentOrderRequestSchema.safeParse({
+      pairId: 0,
+      side: "BUY",
+      size: "0.5",
+      limitPrice: "3200",
+    });
+    const present = agentOrderRequestSchema.safeParse({
+      pairId: 0,
+      side: "BUY",
+      size: "0.5",
+      limitPrice: "3200",
+      sessionAccountCommitment: "0x1111111111111111111111111111111111111111111111111111111111111111",
+    });
+
+    expect(missing.success).toBe(false);
+    expect(present.success).toBe(true);
+  });
+
   it("converts decimals without silent precision loss", () => {
     expect(toUnits("1.25", 6)).toBe(1_250_000n);
     expect(() => toUnits("1.0000001", 6)).toThrow(AgentOrderError);

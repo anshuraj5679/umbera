@@ -22,6 +22,7 @@ describe("privacy redaction helpers", () => {
       limitPrice: "3200",
       clientOrderId: "private-client-id",
       agent: "alpha-agent",
+      sessionAccountCommitment: "0x3333333333333333333333333333333333333333333333333333333333333333",
     }, "test-secret-123456");
 
     expect(payload).toMatchObject({
@@ -29,6 +30,7 @@ describe("privacy redaction helpers", () => {
       pairId: 0,
       hasClientOrderId: true,
       hasAgent: true,
+      sessionAccountCommitment: "0x3333333333333333333333333333333333333333333333333333333333333333",
     });
     expect(JSON.stringify(payload)).not.toContain("BUY");
     expect(JSON.stringify(payload)).not.toContain("0.5");

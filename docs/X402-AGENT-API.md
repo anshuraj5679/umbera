@@ -1,10 +1,10 @@
-# x402 Agent Order API
+# x402 Agent Access API
 
 This slice makes x402 useful for autonomous trading agents, not just for a paywall.
 
-The matcher service exposes a paid HTTP endpoint that accepts a structured order intent, validates local risk policy, encrypts the order with CoFHE using a delegated testnet trader wallet, submits `DarkPoolDEX.submitOrder`, and returns the canonical transaction and order ids.
+The matcher service exposes a paid access endpoint. x402 settlement returns a short-lived bearer capability, and the separate order endpoint uses that capability to submit encrypted account-commitment orders.
 
-The x402 payment is only the access/payment layer. It must not be used as the dark-pool settlement token and must not encode trade direction, size, or price on-chain. The DEX order itself is submitted as four encrypted token legs: `baseDeposit`, `quoteDeposit`, `baseRequest`, and `quoteRequest`. BUY/SELL side is derived only by the trusted order submitter/matcher after decryption.
+The x402 payment is only the access/payment layer. It must not be used as the dark-pool settlement token and must not encode trade direction, size, or price on-chain. The DEX order itself is submitted as four encrypted token legs against a `sessionAccountCommitment`.
 
 ## Architecture
 
@@ -14,6 +14,7 @@ The x402 payment is only the access/payment layer. It must not be used as the da
 - DEX execution network: Arbitrum Sepolia, `421614`.
 - Default enabled DEX pairs: `0` `eUSDC/eWETH`, `1` `eUSDC/eWBTC`, `2` `eUSDC/eARB`, `3` `eUSDC/eLINK`.
 - Trade signer: `AGENT_TRADER_PRIVATE_KEY`, separate from `MATCHER_PRIVATE_KEY`.
+- Access token: opaque HMAC bearer token; the database stores only its hash, expiry, scope, and usage count.
 - DEX token setup: the delegated trader must hold wrapped encrypted balances. The API auto-sets DEX operator approval on both encrypted wrappers for the selected pair when missing.
 
 The free x402.org facilitator is useful only for the current challenge E2E. It is not the intended alpha privacy path because the Obsidian DEX deployment is on Arbitrum Sepolia. For a real Arbitrum-only agent flow, keep x402 disabled until an Arbitrum-compatible facilitator is configured, or run a custom facilitator for plain Arbitrum payment tokens.
@@ -31,9 +32,28 @@ Public discovery route for agents. It returns:
 - Risk limits.
 - Expected order request shape.
 
+### `POST /agent/access`
+
+Paid route when `X402_AGENT_ENABLED=true`; dev-bypass route when `AGENT_ORDER_DEV_BYPASS_TOKEN` is configured.
+
+Response:
+
+```json
+{
+  "ok": true,
+  "accessToken": "obsat_...",
+  "tokenType": "Bearer",
+  "scope": "agent:order",
+  "chainId": 421614,
+  "dexAddress": "0x...",
+  "expiresAt": "2026-05-31T12:00:00.000Z",
+  "maxUses": 1
+}
+```
+
 ### `POST /agent/orders`
 
-Paid route when `X402_AGENT_ENABLED=true`.
+Requires `Authorization: Bearer <accessToken>`.
 
 Request body:
 
@@ -45,7 +65,8 @@ Request body:
   "limitPrice": "3200",
   "expiryHours": 24,
   "clientOrderId": "agent-run-001",
-  "agent": "demo-agent"
+  "agent": "demo-agent",
+  "sessionAccountCommitment": "0x..."
 }
 ```
 
@@ -59,21 +80,18 @@ Response body after successful DEX submission:
   "orderId": "123",
   "batchId": "57",
   "pairId": 0,
-  "side": "BUY",
-  "trader": "0x...",
-  "depositToken": "eUSDC",
-  "requestToken": "eWETH",
+  "accountCommitment": "0x...",
   "expiry": "1770000000",
-  "paymentMode": "x402",
+  "accessMode": "bearer-capability",
   "replayed": false
 }
 ```
 
-The response does not echo order sizing or decrypted amounts. It currently echoes requested side and token direction back to the paying caller because the caller already supplied that intent. Treat the request and response as private HTTPS traffic between the agent and matcher, not as public audit material.
+The response does not echo order side, sizing, token direction, decrypted amounts, or payment identity.
 
 `clientOrderId` is now used as an idempotency key for agent submissions. A completed duplicate returns the original task/result with `replayed: true`; an in-flight duplicate returns a task conflict instead of submitting a second DEX order.
 
-On-chain DEX calldata and events do not include public side. Public observers can see that the delegated trader submitted an order for a pair and batch, but they cannot distinguish BUY from SELL from the DEX event or settlement token-flow shape. The x402 payment transaction can still reveal that an agent paid for API access near a trade, so production privacy should use unlinkable agent payment wallets, batching/rate limits, and a facilitator/payment network policy that avoids binding the payer identity to the DEX trader address.
+On-chain DEX calldata and events do not include public side. Public observers can see an account commitment submitted an order for a pair and batch, but they cannot distinguish BUY from SELL from the DEX event or settlement token-flow shape. x402 payment remains public, but it is no longer stored with order payloads.
 
 ## Environment
 
@@ -83,8 +101,11 @@ X402_AGENT_FACILITATOR_URL=https://x402.org/facilitator
 X402_AGENT_NETWORK=eip155:84532
 X402_AGENT_PRICE=$0.01
 X402_AGENT_PAY_TO=0xReceiver
-X402_AGENT_RESOURCE_URL=https://obsidian-darkpool.vercel.app/api/agent/orders
+X402_AGENT_RESOURCE_URL=https://obsidian-darkpool.vercel.app/api/agent/access
 X402_AGENT_SYNC_FACILITATOR_ON_START=true
+AGENT_ACCESS_TOKEN_SECRET=replace-with-long-random-secret
+AGENT_ACCESS_TOKEN_TTL_SEC=600
+AGENT_ACCESS_MAX_USES=1
 
 AGENT_TRADER_PRIVATE_KEY=0x...
 AGENT_ORDER_ALLOWED_PAIR_IDS=0,1,2,3
@@ -105,11 +126,11 @@ Then call:
 ```powershell
 curl -X POST http://localhost:8080/agent/orders `
   -H "Content-Type: application/json" `
-  -H "x-agent-bypass-token: replace-with-long-random-token" `
-  -d '{"pairId":0,"side":"BUY","size":"0.5","limitPrice":"3200"}'
+  -H "Authorization: Bearer <access-token>" `
+  -d '{"pairId":0,"side":"BUY","size":"0.5","limitPrice":"3200","sessionAccountCommitment":"0x..."}'
 ```
 
-If neither x402 nor the bypass token is configured, `POST /agent/orders` returns `503` and does not submit orders.
+If neither x402 nor the bypass token is configured, `POST /agent/access` returns `503` and no order token can be minted.
 
 ## Current Limits
 
@@ -119,7 +140,7 @@ If neither x402 nor the bypass token is configured, `POST /agent/orders` returns
 - Agent-order idempotency is persisted through the matcher task ledger. Broader task-backed retry and reconciliation still need to be applied to close, match, publish, settle, and audit workflows.
 - x402 verification happens before order execution; settlement happens around the final response. If settlement fails after a DEX tx succeeds, the agent may receive a settlement error even though the on-chain order exists. Persisted idempotency and reconciliation should be the next hardening step.
 - If x402 is moved fully onto Arbitrum Sepolia with a custom facilitator, keep the payment token public/plain and separate from encrypted trading balances. Do not use `eUSDC`, `eWETH`, or other encrypted wrappers as x402 payment tokens.
-- Public matcher APIs and public audit artifacts must not expose agent-request side. Side may appear only in the private agent request/response and trusted matcher/operator internals.
+- Public matcher APIs and public audit artifacts must not expose agent-request side. Side appears only in the private agent request and trusted matcher memory during auction execution.
 
 ## E2E Checks
 
