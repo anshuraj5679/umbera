@@ -122,8 +122,10 @@ export function startHttp(
     res.json(agentApi.orderService.capabilities());
   });
   if (agentApi) {
+    if (agentApi.paymentMiddleware) {
+      app.use(agentApi.paymentMiddleware);
+    }
     const accessMiddlewares = [
-      agentApi.paymentMiddleware,
       requireAgentAccessPurchase(agentApi),
     ].filter(Boolean) as RequestHandler[];
     app.post("/agent/access", ...accessMiddlewares, async (req, res) => {

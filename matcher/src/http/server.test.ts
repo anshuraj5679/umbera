@@ -1,5 +1,6 @@
+import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { publicAuditVerificationRow, publicBatchAuditVerificationRow, publicMatchRow, publicOrderRow } from "./server.js";
+import { publicAuditVerificationRow, publicBatchAuditVerificationRow, publicMatchRow, publicOrderRow, startHttp } from "./server.js";
 
 describe("public matcher API redaction", () => {
   it("does not expose private order-side or amount handles", () => {
@@ -317,5 +318,52 @@ describe("public matcher API redaction", () => {
     expect(anchored.anchored.ok).toBe(true);
     expect(JSON.stringify(anchored)).not.toContain("private-bucket");
     expect(JSON.stringify(anchored)).not.toContain("pair-0/batch-52");
+  });
+
+  it("applies x402 protection before issuing agent access tokens", async () => {
+    const server = startHttp(
+      0,
+      {} as any,
+      "0x1111111111111111111111111111111111111111",
+      async () => {},
+      {
+        orderService: { capabilities: () => ({ ok: true }) } as any,
+        paymentMiddleware: (req, res, next) => {
+          if (req.path === "/agent/access") {
+            return res.status(402).json({ error: "x402 payment required" });
+          }
+          return next();
+        },
+        x402Enabled: true,
+        accessTokenSecret: "test-secret",
+        accessTokenTtlSec: 60,
+        accessMaxUses: 1,
+      },
+      {
+        dex: {} as any,
+        dexAddress: "0x1111111111111111111111111111111111111111",
+        chainId: 421614,
+        pairs: [],
+        disputeWindowSec: 300,
+        matchDelaySec: 15,
+        confirmationDepth: 12,
+      },
+    );
+    try {
+      const address = server.address() as AddressInfo;
+      const response = await fetch(`http://127.0.0.1:${address.port}/agent/access`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      const body = await response.json();
+
+      expect(response.status).toBe(402);
+      expect(body).toEqual({ error: "x402 payment required" });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
   });
 });

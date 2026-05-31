@@ -19,7 +19,7 @@ export function createAgentX402Middleware(cfg: Config): RequestHandler | undefin
     .register(network, new ExactEvmScheme());
 
   const routes: RoutesConfig = {
-    "POST /agent/orders": {
+    "POST /agent/access": {
       accepts: [
         {
           scheme: "exact",
@@ -28,18 +28,18 @@ export function createAgentX402Middleware(cfg: Config): RequestHandler | undefin
           payTo: cfg.X402_AGENT_PAY_TO,
           maxTimeoutSeconds: 120,
           extra: {
-            product: "obsidian-darkpool-agent-order",
+            product: "obsidian-darkpool-agent-access",
           },
         },
       ],
       resource: cfg.X402_AGENT_RESOURCE_URL,
-      description: "Submit an encrypted Obsidian dark-pool order for an autonomous agent.",
+      description: "Buy short-lived access to submit an encrypted Obsidian dark-pool order.",
       mimeType: "application/json",
       unpaidResponseBody: () => ({
         contentType: "application/json",
         body: {
           error: "x402 payment required",
-          endpoint: "POST /agent/orders",
+          endpoint: "POST /agent/access",
         },
       }),
       settlementFailedResponseBody: () => ({
