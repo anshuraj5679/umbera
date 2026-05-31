@@ -9,6 +9,7 @@ import { closeBatchIfReady, startBatchCloser } from "./workers/batch-closer.js";
 import { settleOneMatch, startSettler } from "./workers/settler.js";
 import { matchClosedBatches, onBatchClosed, startBatchMatcher } from "./workers/batch-matcher.js";
 import { startRetryWorker } from "./workers/retry-worker.js";
+import { startInvariantReconciler, startStaleTaskRecovery } from "./workers/invariant-reconciler.js";
 import { initCofhe } from "./fhe/permit.js";
 import { startHttp } from "./http/server.js";
 import { createAgentOrderService } from "./agent/orders.js";
@@ -131,6 +132,18 @@ async function main() {
   startSettler(dex, db, disputeWindow, deploymentScope, settlementProofCtx);
   startAuditRepairWorker(db, deploymentScope, cfg.S3_BUCKET, {
     intervalSec: cfg.MATCHER_AUDIT_REPAIR_INTERVAL_SEC,
+  });
+  startStaleTaskRecovery(db, {
+    intervalSec: cfg.MATCHER_STALE_TASK_SWEEP_INTERVAL_SEC,
+    staleAfterSec: cfg.MATCHER_STALE_TASK_AFTER_SEC,
+  });
+  startInvariantReconciler(db, {
+    intervalSec: cfg.MATCHER_INVARIANT_RECONCILE_INTERVAL_SEC,
+    dex,
+    chainId: cfg.chainId,
+    dexAddress: dep.dex,
+    disputeWindowSec: disputeWindow,
+    auditBucket: cfg.S3_BUCKET,
   });
   startRetryWorker(db, {
     CLOSE_BATCH: async (task) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTaskLeaseExpired, isTaskRetryable, isTaskStale, publicTaskEventRow, publicTaskRow, type TaskEventRow, type TaskRow } from "./store.js";
+import { isTaskLeaseExpired, isTaskRetryable, isTaskStale, publicTaskEventRow, publicTaskRow, recoverStaleRunningTasks, type TaskEventRow, type TaskRow } from "./store.js";
 
 describe("task public redaction", () => {
   it("exposes lifecycle metadata without private payloads or results", () => {
@@ -104,5 +104,61 @@ describe("task public redaction", () => {
       status: "RUNNING",
       leaseExpiresAt: new Date("2026-05-26T00:04:00.000Z"),
     }, now)).toBe(true);
+  });
+
+  it("recovers stale running tasks into failed retryable tasks", async () => {
+    const now = new Date("2026-05-26T00:05:00.000Z");
+    const staleBefore = new Date("2026-05-26T00:01:00.000Z");
+    const updates: any[] = [];
+    const events: any[] = [];
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: async () => [{
+                id: "task-1",
+                status: "RUNNING",
+                attempts: 1,
+                maxAttempts: 3,
+                heartbeatAt: new Date("2026-05-26T00:00:00.000Z"),
+                leaseExpiresAt: new Date("2026-05-26T00:04:00.000Z"),
+                createdAt: new Date("2026-05-26T00:00:00.000Z"),
+              }],
+            }),
+          }),
+        }),
+      }),
+      update: () => ({
+        set: (patch: any) => ({
+          where: async () => {
+            updates.push(patch);
+          },
+        }),
+      }),
+      insert: () => ({
+        values: async (value: any) => {
+          events.push(value);
+        },
+      }),
+    };
+
+    await expect(recoverStaleRunningTasks(db as any, { now, staleBefore })).resolves.toEqual({
+      checked: 1,
+      recovered: 1,
+    });
+    expect(updates[0]).toMatchObject({
+      status: "FAILED",
+      error: "Recovered stale running task for retry.",
+      nextRunAt: now,
+      leaseOwner: null,
+      leaseExpiresAt: null,
+    });
+    expect(events[0]).toMatchObject({
+      taskId: "task-1",
+      type: "RECOVERED",
+      status: "FAILED",
+      message: "stale running task recovered for retry",
+    });
   });
 });

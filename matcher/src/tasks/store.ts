@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, lte, or, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import { taskEvents, tasks } from "../db/schema.js";
 
@@ -205,7 +205,7 @@ export async function leaseTaskForRetry(
     .where(and(
       eq(tasks.id, taskId),
       eq(tasks.status, "FAILED"),
-      lt(tasks.attempts, tasks.maxAttempts),
+      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
       lte(tasks.nextRunAt, now),
     ));
   const leased = await taskById(db, taskId);
@@ -250,11 +250,63 @@ export async function retryableTasks(db: Db, now = new Date(), limit = 20) {
     .from(tasks)
     .where(and(
       eq(tasks.status, "FAILED"),
-      lt(tasks.attempts, tasks.maxAttempts),
+      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
       lte(tasks.nextRunAt, now),
     ))
     .orderBy(tasks.nextRunAt, tasks.createdAt)
     .limit(limit);
+}
+
+export async function recoverStaleRunningTasks(db: Db, input: {
+  now?: Date;
+  staleBefore: Date;
+  limit?: number;
+}) {
+  const now = input.now ?? new Date();
+  const rows = await db.select()
+    .from(tasks)
+    .where(and(
+      eq(tasks.status, "RUNNING"),
+      or(
+        lte(tasks.leaseExpiresAt, now),
+        lte(tasks.heartbeatAt, input.staleBefore),
+      ),
+    ))
+    .orderBy(tasks.leaseExpiresAt, tasks.heartbeatAt, tasks.createdAt)
+    .limit(input.limit ?? 25);
+
+  let recovered = 0;
+  for (const row of rows) {
+    const canRetry = row.attempts < row.maxAttempts;
+    await db.update(tasks)
+      .set({
+        status: "FAILED",
+        error: canRetry
+          ? "Recovered stale running task for retry."
+          : "Recovered stale running task after max attempts.",
+        nextRunAt: canRetry ? now : null,
+        heartbeatAt: now,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(and(eq(tasks.id, row.id), eq(tasks.status, "RUNNING")));
+    await appendTaskEvent(db, row.id, {
+      type: "RECOVERED",
+      status: "FAILED",
+      message: canRetry
+        ? "stale running task recovered for retry"
+        : "stale running task recovered after max attempts",
+      payload: {
+        previousLeaseExpiresAt: row.leaseExpiresAt?.toISOString() ?? null,
+        previousHeartbeatAt: row.heartbeatAt?.toISOString() ?? null,
+      },
+    });
+    recovered++;
+  }
+
+  return { checked: rows.length, recovered };
 }
 
 export async function staleRunningTasks(db: Db, olderThan: Date, limit = 20) {

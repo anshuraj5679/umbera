@@ -15,6 +15,8 @@
 
 The invariant report is expected to stay `ok: true`. Privacy warnings can be reconciled with `POST /operator/reconcile`; this enqueues `SCRUB_PRIVATE_TASK_DATA` when historical task payload, task event, or worker error residue is detected.
 It also enqueues `REPAIR_AUDIT_PRIVACY` when legacy audit transcript objects need to be rewritten as receipt-only v2 objects.
+The matcher also runs automatic invariant reconciliation on `MATCHER_INVARIANT_RECONCILE_INTERVAL_SEC`, so repairable health issues are converted into idempotent retry tasks without manual operator action.
+Stale `RUNNING` tasks are recovered on `MATCHER_STALE_TASK_SWEEP_INTERVAL_SEC`; recovered tasks move to `FAILED` with `nextRunAt=now()` when attempts remain, allowing the retry worker to pick them up.
 
 Privacy blockers require immediate investigation:
 
