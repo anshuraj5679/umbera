@@ -257,6 +257,17 @@ export async function retryableTasks(db: Db, now = new Date(), limit = 20) {
     .limit(limit);
 }
 
+export async function deadLetterTasks(db: Db, limit = 20) {
+  return db.select()
+    .from(tasks)
+    .where(and(
+      eq(tasks.status, "FAILED"),
+      sql`${tasks.attempts} >= ${tasks.maxAttempts}`,
+    ))
+    .orderBy(desc(tasks.updatedAt), desc(tasks.createdAt))
+    .limit(limit);
+}
+
 export async function recoverStaleRunningTasks(db: Db, input: {
   now?: Date;
   staleBefore: Date;

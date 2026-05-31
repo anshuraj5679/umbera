@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTaskLeaseExpired, isTaskRetryable, isTaskStale, publicTaskEventRow, publicTaskRow, recoverStaleRunningTasks, type TaskEventRow, type TaskRow } from "./store.js";
+import { deadLetterTasks, isTaskLeaseExpired, isTaskRetryable, isTaskStale, publicTaskEventRow, publicTaskRow, recoverStaleRunningTasks, type TaskEventRow, type TaskRow } from "./store.js";
 
 describe("task public redaction", () => {
   it("exposes lifecycle metadata without private payloads or results", () => {
@@ -160,5 +160,26 @@ describe("task public redaction", () => {
       status: "FAILED",
       message: "stale running task recovered for retry",
     });
+  });
+
+  it("selects failed tasks that exhausted retry attempts as dead letters", async () => {
+    let whereCalled = false;
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => {
+            whereCalled = true;
+            return {
+              orderBy: () => ({
+                limit: async (limit: number) => [{ id: "task-dead", limit }],
+              }),
+            };
+          },
+        }),
+      }),
+    };
+
+    await expect(deadLetterTasks(db as any, 7)).resolves.toEqual([{ id: "task-dead", limit: 7 }]);
+    expect(whereCalled).toBe(true);
   });
 });

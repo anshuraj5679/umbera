@@ -1,7 +1,7 @@
 import type { Contract } from "ethers";
 import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
-import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable } from "../db/schema.js";
+import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable, tasks as tasksTable } from "../db/schema.js";
 import { createTask, taskByIdempotencyKey } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
 import { countPrivateTaskResidue, type PrivacyResidueCounts } from "../privacy/scrub.js";
@@ -138,6 +138,25 @@ export async function buildInvariantReport(db: Db, input: {
       severity: "WARNING",
       code: "UNRESOLVED_WORKER_ERROR",
       message: `Unresolved worker error in ${row.component}.`,
+    });
+  }
+
+  const deadLetters = await db.select()
+    .from(tasksTable)
+    .where(and(
+      eq(tasksTable.status, "FAILED"),
+      sql`${tasksTable.attempts} >= ${tasksTable.maxAttempts}`,
+    ))
+    .orderBy(desc(tasksTable.updatedAt), desc(tasksTable.createdAt))
+    .limit(limit);
+  for (const task of deadLetters) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "TASK_DEAD_LETTER",
+      message: `${task.type} task exhausted retry attempts and needs operator action.`,
+      batchId: task.batchId?.toString(),
+      matchId: task.matchId?.toString(),
+      taskType: task.type,
     });
   }
 

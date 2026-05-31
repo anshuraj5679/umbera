@@ -50,6 +50,7 @@ import {
   sanitizeWorkerErrorPayload,
 } from "../privacy/redaction.js";
 import {
+  deadLetterTasks,
   expiredLeasedTasks,
   publicTaskEventRow,
   publicTaskRow,
@@ -663,6 +664,14 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
       if (stale.length > 0 || expired.length > 0) health.ok = false;
     } catch (error) {
       health.taskHealthReadError = errorMessage(error);
+    }
+
+    try {
+      const deadLetters = await deadLetterTasks(db, 10);
+      health.deadLetterTasks = deadLetters.map(publicTaskRow);
+      if (deadLetters.length > 0) health.ok = false;
+    } catch (error) {
+      health.deadLetterTaskReadError = errorMessage(error);
     }
   }
 
