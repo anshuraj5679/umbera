@@ -20,6 +20,7 @@ Privacy blockers require immediate investigation:
 - `LEGACY_PLAINTEXT_ORDER_COLUMNS`
 - `ORDER_SIDE_PLAINTEXT_ROWS`
 - `AGENT_ACCESS_TOKEN_HASH_INVALID`
+- `AUDIT_OBJECT_PRIVATE_FIELDS`
 
 For ops-only manual cleanup, run:
 

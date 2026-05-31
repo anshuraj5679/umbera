@@ -47,7 +47,7 @@ What is live today:
 - Public match and batch audit receipts with salted commitment roots.
 - Receipt-only audit storage: signed proof receipts and salted roots without persisted decrypted auction inputs.
 - Agent order entry path where x402 buys short-lived access, then encrypted trading uses account commitments.
-- Privacy invariant health checks that detect legacy plaintext columns, non-private order side rows, raw access-token storage, and scrub-able task residue.
+- Privacy invariant health checks that detect legacy plaintext columns, non-private order side rows, raw access-token storage, private audit-object fields, and scrub-able task residue.
 
 ## Execution Core
 
@@ -98,7 +98,7 @@ Current implementation:
 - x402 payment grants a short-lived access capability; order submission uses account commitments and does not store the payer identity with the order.
 - Public proof receipts expose salted commitment roots, not private values or private salts.
 - Audit objects are receipt-only and do not persist decrypted auction input orders.
-- Invariant checks continuously scan for legacy plaintext order columns, non-`PRIVATE` stored order sides, non-hashed access tokens, and private residue in historical task ledgers.
+- Invariant checks continuously scan for legacy plaintext order columns, non-`PRIVATE` stored order sides, non-hashed access tokens, private fields in recent audit objects, and private residue in historical task ledgers.
 
 V1 trust model:
 

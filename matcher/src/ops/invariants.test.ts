@@ -31,6 +31,7 @@ describe("privacy posture invariants", () => {
         taskEventRows: 5,
         workerErrorRows: 6,
       },
+      auditObjects: undefined,
     });
   });
 });

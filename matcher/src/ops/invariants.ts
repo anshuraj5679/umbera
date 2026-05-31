@@ -5,6 +5,7 @@ import { batches as batchesTable, errors as errorsTable, matches as matchesTable
 import { createTask, taskByIdempotencyKey } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
 import { countPrivateTaskResidue, type PrivacyResidueCounts } from "../privacy/scrub.js";
+import { scanAuditObjectPrivacy, type AuditObjectPrivacyScan } from "../audit/privacy.js";
 
 export type InvariantSeverity = "BLOCKING" | "WARNING";
 export type InvariantIssue = {
@@ -18,6 +19,8 @@ export type InvariantIssue = {
   taskType?: string;
   count?: number;
   columns?: string[];
+  forbiddenFields?: string[];
+  schema?: string | null;
 };
 
 export type InvariantReport = {
@@ -40,6 +43,7 @@ export type PrivacyPostureReport = {
   agentAccessTokenHashInvalidRows: number;
   expiredActiveAccessTokenRows: number;
   residue: PrivacyResidueCounts;
+  auditObjects?: AuditObjectPrivacyScan;
 };
 
 export async function buildInvariantReport(db: Db, input: {
@@ -48,11 +52,16 @@ export async function buildInvariantReport(db: Db, input: {
   dexAddress: string;
   disputeWindowSec: number;
   limit?: number;
+  auditBucket?: string;
+  auditPrivacyScanLimit?: number;
 }): Promise<InvariantReport> {
   const scope = { chainId: input.chainId, dexAddress: normalizeDexAddress(input.dexAddress) };
   const limit = input.limit ?? 25;
   const issues: InvariantIssue[] = [];
-  const privacy = await buildPrivacyPostureReport(db, scope);
+  const privacy = await buildPrivacyPostureReport(db, scope, {
+    auditBucket: input.auditBucket,
+    auditPrivacyScanLimit: input.auditPrivacyScanLimit ?? Math.min(limit, 5),
+  });
   addPrivacyIssues(issues, privacy);
 
   const closed = await db.select()
@@ -189,30 +198,44 @@ export async function enqueueInvariantRepairs(db: Db, report: InvariantReport) {
   return { enqueued: tasks.filter(Boolean) };
 }
 
-export async function buildPrivacyPostureReport(db: Db, scope: DeploymentScope): Promise<PrivacyPostureReport> {
+export async function buildPrivacyPostureReport(db: Db, scope: DeploymentScope, options: {
+  auditBucket?: string;
+  auditPrivacyScanLimit?: number;
+} = {}): Promise<PrivacyPostureReport> {
   const [
     legacyOrderColumns,
     nonPrivateOrderSideRows,
     agentAccessTokenHashInvalidRows,
     expiredActiveAccessTokenRows,
     residue,
+    auditObjects,
   ] = await Promise.all([
     findLegacyOrderColumns(db),
     countNonPrivateOrderSides(db, scope),
     countInvalidAgentAccessTokenHashes(db, scope),
     countExpiredActiveAccessTokens(db, scope),
     countPrivateTaskResidue(db),
+    options.auditBucket
+      ? scanAuditObjectPrivacy(db, {
+        scope,
+        bucket: options.auditBucket,
+        limit: options.auditPrivacyScanLimit ?? 5,
+      })
+      : Promise.resolve(undefined),
   ]);
 
   const blockingCount = [
     legacyOrderColumns.length > 0,
     nonPrivateOrderSideRows > 0,
     agentAccessTokenHashInvalidRows > 0,
+    (auditObjects?.forbiddenFieldCount ?? 0) > 0,
   ].filter(Boolean).length;
   const warningCount = [
     residue.agentSubmitOrderTaskRows > 0,
     residue.taskEventRows > 0,
     residue.workerErrorRows > 0,
+    (auditObjects?.legacySchemaCount ?? 0) > 0,
+    (auditObjects?.failedCount ?? 0) > 0,
   ].filter(Boolean).length;
 
   return {
@@ -224,6 +247,7 @@ export async function buildPrivacyPostureReport(db: Db, scope: DeploymentScope):
     agentAccessTokenHashInvalidRows,
     expiredActiveAccessTokenRows,
     residue,
+    auditObjects,
   };
 }
 
@@ -278,6 +302,36 @@ function addPrivacyIssues(issues: InvariantIssue[], privacy: PrivacyPostureRepor
       message: "Historical worker error payload rows contain private request residue and should be scrubbed.",
       count: privacy.residue.workerErrorRows,
       taskType: "SCRUB_PRIVATE_TASK_DATA",
+    });
+  }
+  if (privacy.auditObjects && privacy.auditObjects.legacySchemaCount > 0) {
+    issues.push({
+      severity: "WARNING",
+      code: "AUDIT_OBJECT_LEGACY_SCHEMA",
+      message: "Recent audit objects include legacy transcript schemas instead of receipt-only v2 objects.",
+      count: privacy.auditObjects.legacySchemaCount,
+      schema: privacy.auditObjects.issues.find((issue) => issue.code === "LEGACY_AUDIT_SCHEMA")?.schema ?? null,
+    });
+  }
+  if (privacy.auditObjects && privacy.auditObjects.forbiddenFieldCount > 0) {
+    const issue = privacy.auditObjects.issues.find((candidate) => candidate.code === "AUDIT_PRIVATE_FIELDS");
+    issues.push({
+      severity: "BLOCKING",
+      code: "AUDIT_OBJECT_PRIVATE_FIELDS",
+      message: "Recent audit objects contain private transcript fields and must be replaced with receipt-only proofs.",
+      count: privacy.auditObjects.forbiddenFieldCount,
+      matchId: issue?.matchId,
+      batchId: issue?.batchId,
+      forbiddenFields: issue?.forbiddenFields,
+      schema: issue?.schema ?? null,
+    });
+  }
+  if (privacy.auditObjects && privacy.auditObjects.failedCount > 0) {
+    issues.push({
+      severity: "WARNING",
+      code: "AUDIT_OBJECT_PRIVACY_SCAN_FAILED",
+      message: "Recent audit objects could not be scanned for privacy posture.",
+      count: privacy.auditObjects.failedCount,
     });
   }
 }

@@ -739,6 +739,7 @@ function invariantInput(httpCtx: MatcherHttpContext, limit?: number) {
     chainId: httpCtx.chainId,
     dexAddress: httpCtx.dexAddress,
     disputeWindowSec: httpCtx.disputeWindowSec,
+    auditBucket: httpCtx.auditBucket,
     limit,
   };
 }
