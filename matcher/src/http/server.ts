@@ -40,6 +40,7 @@ import {
 } from "../audit/verifier.js";
 import { countMatchesMissingAuditKeys, repairMissingAuditKeys } from "../audit/repair.js";
 import { latestRelayerCheckpoint } from "../relayer/commitments.js";
+import { buildRelayerIntegrityReport } from "../relayer/integrity.js";
 import {
   agentOrderIdempotencyKey,
   hashPrivateValue,
@@ -504,7 +505,8 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
   };
 
   try {
-    const [cursor, latestConfirmed, reorgCount, checkpoint, sessionAccountCount] = await Promise.all([
+    const scope = activeScope(httpCtx);
+    const [cursor, latestConfirmed, reorgCount, checkpoint, sessionAccountCount, relayerIntegrity] = await Promise.all([
       db.select().from(eventCursor).where(eq(eventCursor.component, "matcher")).limit(1),
       db.select().from(indexedBlocks).where(scopeWhere(indexedBlocks, httpCtx)).orderBy(desc(indexedBlocks.blockNumber)).limit(1),
       db.select({ value: sql<number>`count(*)::int` })
@@ -513,6 +515,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
         .then((rows) => rows[0]),
       latestRelayerCheckpoint(db),
       db.select({ value: sql<number>`count(*)::int` }).from(relayerAccounts).where(scopeWhere(relayerAccounts, httpCtx)).then((rows) => rows[0]?.value ?? 0),
+      scope ? buildRelayerIntegrityReport(db, scope) : Promise.resolve(null),
     ]);
     health.db.ok = true;
     health.indexer.latestIndexedBlock = cursor[0]?.lastBlock?.toString() ?? null;
@@ -521,6 +524,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
     health.relayerState = {
       latestCheckpoint: checkpoint ? publicRelayerCheckpointRow(checkpoint) : null,
       sessionAccountCount,
+      integrity: relayerIntegrity,
     };
     const missingTranscriptKeyCount = await countMatchesMissingAuditKeys(db, httpCtx
       ? { chainId: httpCtx.chainId, dexAddress: normalizeDexAddress(httpCtx.dexAddress) }
@@ -794,11 +798,13 @@ async function buildIndexerStatus(db: Db, httpCtx?: MatcherHttpContext) {
 }
 
 async function buildRelayerStateStatus(db: Db, httpCtx?: MatcherHttpContext) {
-  const [checkpoint, commitmentCount, consumedCount, accountCount] = await Promise.all([
+  const scope = activeScope(httpCtx);
+  const [checkpoint, commitmentCount, consumedCount, accountCount, integrity] = await Promise.all([
     latestRelayerCheckpoint(db),
     db.select({ value: sql<number>`count(*)::int` }).from(orderCommitments).where(scopeWhere(orderCommitments, httpCtx)).then((rows) => rows[0]?.value ?? 0),
     db.select({ value: sql<number>`count(*)::int` }).from(consumedNullifiers).then((rows) => rows[0]?.value ?? 0),
     db.select({ value: sql<number>`count(*)::int` }).from(relayerAccounts).where(scopeWhere(relayerAccounts, httpCtx)).then((rows) => rows[0]?.value ?? 0),
+    scope ? buildRelayerIntegrityReport(db, scope) : Promise.resolve(null),
   ]);
   return {
     chainId: httpCtx?.chainId ?? 421614,
@@ -807,6 +813,7 @@ async function buildRelayerStateStatus(db: Db, httpCtx?: MatcherHttpContext) {
     orderCommitmentCount: commitmentCount,
     consumedNullifierCount: consumedCount,
     sessionAccountCount: accountCount,
+    integrity,
   };
 }
 

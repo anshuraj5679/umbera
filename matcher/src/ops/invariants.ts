@@ -6,6 +6,7 @@ import { createTask, taskByIdempotencyKey } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
 import { countPrivateTaskResidue, type PrivacyResidueCounts } from "../privacy/scrub.js";
 import { scanAuditObjectPrivacy, type AuditObjectPrivacyScan } from "../audit/privacy.js";
+import { buildRelayerIntegrityReport } from "../relayer/integrity.js";
 
 export type InvariantSeverity = "BLOCKING" | "WARNING";
 export type InvariantIssue = {
@@ -66,6 +67,7 @@ export async function buildInvariantReport(db: Db, input: {
   });
   addPrivacyIssues(issues, privacy);
   await addIndexerLagIssue(db, issues, input.dex, input.indexerMaxLagBlocks);
+  await addRelayerIntegrityIssues(db, issues, scope);
 
   const closed = await db.select()
     .from(batchesTable)
@@ -538,6 +540,42 @@ async function addIndexerLagIssue(
       code: "INDEXER_LAG_HIGH",
       message: `Indexer lag ${lagBlocks} blocks exceeds configured maximum ${maxLagBlocks}.`,
       count: lagBlocks,
+    });
+  }
+}
+
+async function addRelayerIntegrityIssues(db: Db, issues: InvariantIssue[], scope: DeploymentScope) {
+  const report = await buildRelayerIntegrityReport(db, scope);
+  if (report.ordersMissingCommitments > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "ORDER_COMMITMENTS_MISSING",
+      message: "Indexed orders are missing relayer order commitments.",
+      count: report.ordersMissingCommitments,
+    });
+  }
+  if (report.invalidOrderCommitmentRows > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "ORDER_COMMITMENTS_INVALID",
+      message: "Order commitment rows contain invalid commitment, nullifier, salt, or account commitment values.",
+      count: report.invalidOrderCommitmentRows,
+    });
+  }
+  if (report.orderAccountCommitmentMismatchRows > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "ORDER_ACCOUNT_COMMITMENT_MISMATCH",
+      message: "Order rows and relayer commitment rows disagree on account commitment linkage.",
+      count: report.orderAccountCommitmentMismatchRows,
+    });
+  }
+  if (report.settledOrdersMissingConsumedNullifiers > 0) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "CONSUMED_NULLIFIERS_MISSING",
+      message: "Settled order commitments are missing consumed nullifier records.",
+      count: report.settledOrdersMissingConsumedNullifiers,
     });
   }
 }
