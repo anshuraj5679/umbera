@@ -147,6 +147,7 @@ async function main() {
     disputeWindowSec: disputeWindow,
     auditBucket: cfg.S3_BUCKET,
     requireBatchProofAnchorForSettlement: cfg.MATCHER_REQUIRE_BATCH_PROOF_ANCHOR_FOR_SETTLEMENT,
+    indexerMaxLagBlocks: cfg.MATCHER_INDEXER_MAX_LAG_BLOCKS,
   });
   startRetryWorker(db, {
     CLOSE_BATCH: async (task) => {
@@ -204,6 +205,7 @@ async function main() {
     disputeWindowSec: disputeWindow,
     matchDelaySec: cfg.MATCHER_BATCH_MATCH_DELAY_SEC,
     confirmationDepth: cfg.MATCHER_INDEX_CONFIRMATIONS,
+    indexerMaxLagBlocks: cfg.MATCHER_INDEXER_MAX_LAG_BLOCKS,
     auditBucket: cfg.S3_BUCKET,
     corsOrigins: parseCorsOrigins(cfg.MATCHER_CORS_ORIGINS),
   });

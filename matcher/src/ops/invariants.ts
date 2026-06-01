@@ -1,7 +1,7 @@
 import type { Contract } from "ethers";
 import { and, desc, eq, isNull, lte, sql } from "drizzle-orm";
 import type { Db } from "../db/client.js";
-import { batches as batchesTable, errors as errorsTable, matches as matchesTable, orders as ordersTable, tasks as tasksTable } from "../db/schema.js";
+import { batches as batchesTable, errors as errorsTable, eventCursor, matches as matchesTable, orders as ordersTable, tasks as tasksTable } from "../db/schema.js";
 import { createTask, taskByIdempotencyKey } from "../tasks/store.js";
 import { normalizeDexAddress, type DeploymentScope } from "../orders/lifecycle.js";
 import { countPrivateTaskResidue, type PrivacyResidueCounts } from "../privacy/scrub.js";
@@ -55,6 +55,7 @@ export async function buildInvariantReport(db: Db, input: {
   auditBucket?: string;
   auditPrivacyScanLimit?: number;
   requireBatchProofAnchorForSettlement?: boolean;
+  indexerMaxLagBlocks?: number;
 }): Promise<InvariantReport> {
   const scope = { chainId: input.chainId, dexAddress: normalizeDexAddress(input.dexAddress) };
   const limit = input.limit ?? 25;
@@ -64,6 +65,7 @@ export async function buildInvariantReport(db: Db, input: {
     auditPrivacyScanLimit: input.auditPrivacyScanLimit ?? Math.min(limit, 5),
   });
   addPrivacyIssues(issues, privacy);
+  await addIndexerLagIssue(db, issues, input.dex, input.indexerMaxLagBlocks);
 
   const closed = await db.select()
     .from(batchesTable)
@@ -505,6 +507,39 @@ async function isBatchProofAnchored(db: Db, scope: DeploymentScope, batchId: big
     .limit(1)
     .then((rows) => rows[0]);
   return !!row?.proofAnchoredAt;
+}
+
+async function addIndexerLagIssue(
+  db: Db,
+  issues: InvariantIssue[],
+  dex: Contract | undefined,
+  maxLagBlocks: number | undefined,
+) {
+  if (!dex || !maxLagBlocks) return;
+  const cursor = await db.select()
+    .from(eventCursor)
+    .where(eq(eventCursor.component, "matcher"))
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+  if (!cursor) {
+    issues.push({
+      severity: "WARNING",
+      code: "INDEXER_CURSOR_MISSING",
+      message: "Indexer cursor is missing; confirmed catchup has not established a checkpoint.",
+    });
+    return;
+  }
+  const head = await dex.runner!.provider!.getBlockNumber();
+  const latestIndexed = Number(cursor.lastBlock);
+  const lagBlocks = Math.max(0, head - latestIndexed);
+  if (lagBlocks > maxLagBlocks) {
+    issues.push({
+      severity: "BLOCKING",
+      code: "INDEXER_LAG_HIGH",
+      message: `Indexer lag ${lagBlocks} blocks exceeds configured maximum ${maxLagBlocks}.`,
+      count: lagBlocks,
+    });
+  }
 }
 
 function scopeWhere(table: { chainId: any; dexAddress: any }, scope: DeploymentScope) {

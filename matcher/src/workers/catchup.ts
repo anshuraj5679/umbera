@@ -11,8 +11,17 @@ import {
   orders,
 } from "../db/schema.js";
 import { createRelayerCheckpoint } from "../relayer/commitments.js";
+import { recordWorkerError, workerErrorPayload } from "./errors.js";
 
-const EVENT_NAMES = ["OrderSubmitted", "OrderSubmittedPrivate", "BatchClosed", "MatchPublished", "MatchDisputed", "MatchSettled"];
+const EVENT_NAMES = [
+  "OrderSubmitted",
+  "OrderSubmittedPrivate",
+  "BatchClosed",
+  "MatchPublished",
+  "MatchDisputed",
+  "MatchSettled",
+  "BatchProofAnchored",
+];
 const MAX_QUERY_ATTEMPTS = 5;
 
 export type CatchupOptions = {
@@ -99,6 +108,7 @@ export function startCatchupPoller(
       await catchup(dex, db, fromDefault, replay, options);
     } catch (e) {
       console.error("confirmed catchup poll failed:", errorMessage(e));
+      await recordWorkerError(db, "catchup", workerErrorPayload(e));
     } finally {
       running = false;
     }
@@ -107,12 +117,16 @@ export function startCatchupPoller(
 
 async function queryEventLogs(dex: Contract, fromBlock: number, toBlock: number) {
   const allLogs: any[] = [];
-  for (const name of EVENT_NAMES) {
+  for (const name of catchupEventNames(dex)) {
     const filter = dex.filters[name]!();
     const logs = await queryFilterWithRetry(dex, filter, name, fromBlock, toBlock);
     allLogs.push(...logs);
   }
   return allLogs.sort(compareLogs);
+}
+
+export function catchupEventNames(dex: Pick<Contract, "filters" | "interface">) {
+  return EVENT_NAMES.filter((name) => hasEvent(dex, name) && typeof dex.filters[name] === "function");
 }
 
 async function storeConfirmedLog(db: Db, log: any, options: Pick<CatchupOptions, "chainId" | "dexAddress">) {
@@ -263,6 +277,15 @@ function compareLogs(a: any, b: any) {
 
 function eventNameOf(log: any): string | null {
   return log?.fragment?.name ?? log?.eventName ?? log?.name ?? null;
+}
+
+function hasEvent(dex: Pick<Contract, "interface">, name: string): boolean {
+  try {
+    if (!dex.interface || typeof dex.interface.getEvent !== "function") return true;
+    return dex.interface.getEvent(name) !== null;
+  } catch {
+    return false;
+  }
 }
 
 function logPayload(log: any) {

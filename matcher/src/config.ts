@@ -32,6 +32,7 @@ const envSchema = z.object({
   MATCHER_CATCHUP_CHUNK_SIZE: z.coerce.number().int().min(25).max(5_000).default(500),
   MATCHER_CATCHUP_INTERVAL_SEC: z.coerce.number().int().min(0).default(30),
   MATCHER_INDEX_CONFIRMATIONS: z.coerce.number().int().min(0).max(10_000).default(12),
+  MATCHER_INDEXER_MAX_LAG_BLOCKS: z.coerce.number().int().min(1).max(1_000_000).default(500),
   MATCHER_EMPTY_BATCH_CLOSE_AFTER_SEC: z.coerce.number().int().min(0).default(0),
   MATCHER_BATCH_MATCH_DELAY_SEC: z.coerce.number().int().min(0).max(600).default(15),
   MATCHER_ANCHOR_BATCH_PROOFS: envBool.default(false),

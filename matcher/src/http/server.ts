@@ -86,6 +86,7 @@ export type MatcherHttpContext = {
   disputeWindowSec: number;
   matchDelaySec: number;
   confirmationDepth: number;
+  indexerMaxLagBlocks?: number;
   auditBucket?: string;
   corsOrigins?: string[];
 };
@@ -498,6 +499,7 @@ async function buildHealth(db: Db, matcherAddress: string, httpCtx?: MatcherHttp
     config: {
       matchDelaySec: httpCtx?.matchDelaySec ?? null,
       disputeWindowSec: httpCtx?.disputeWindowSec ?? null,
+      indexerMaxLagBlocks: httpCtx?.indexerMaxLagBlocks ?? null,
     },
   };
 
@@ -750,6 +752,7 @@ function invariantInput(httpCtx: MatcherHttpContext, limit?: number) {
     disputeWindowSec: httpCtx.disputeWindowSec,
     auditBucket: httpCtx.auditBucket,
     limit,
+    indexerMaxLagBlocks: httpCtx.indexerMaxLagBlocks,
   };
 }
 

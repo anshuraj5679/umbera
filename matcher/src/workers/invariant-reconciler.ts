@@ -12,6 +12,7 @@ export type InvariantReconcilerOptions = {
   disputeWindowSec: number;
   auditBucket?: string;
   requireBatchProofAnchorForSettlement?: boolean;
+  indexerMaxLagBlocks?: number;
   limit?: number;
 };
 
@@ -55,6 +56,7 @@ export async function runInvariantReconcileOnce(db: Db, options: Omit<InvariantR
     disputeWindowSec: options.disputeWindowSec,
     auditBucket: options.auditBucket,
     requireBatchProofAnchorForSettlement: options.requireBatchProofAnchorForSettlement,
+    indexerMaxLagBlocks: options.indexerMaxLagBlocks,
     limit: options.limit ?? 25,
   });
   const repairs = await enqueueInvariantRepairs(db, report);
