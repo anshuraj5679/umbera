@@ -1,7 +1,7 @@
 # Obsidian
 
 <p align="center">
-  <img src="docs/assets/obsidian-hero.svg" alt="Obsidian confidential dark pool" width="100%" />
+  <img src="docs/assets/obsidian-hero.png" alt="Obsidian confidential dark pool" width="100%" />
 </p>
 
 <p align="center">
