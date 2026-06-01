@@ -1,11 +1,12 @@
 import cron from "node-cron";
 import type { Contract } from "ethers";
 import type { Db } from "../db/client.js";
-import { matches as matchesTable } from "../db/schema.js";
+import { batches as batchesTable, matches as matchesTable } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { runTask } from "../tasks/store.js";
 import { markOrdersSettled, type DeploymentScope } from "../orders/lifecycle.js";
 import { verifyAuditTranscriptFromS3 } from "../audit/verifier.js";
+import { buildVerifiedBatchAuditReceipt } from "../audit/batch.js";
 import { errorMessage, recordWorkerError, workerErrorPayload } from "./errors.js";
 
 export type SettlementMatchRow = {
@@ -21,6 +22,7 @@ export type SettlementReceiptLike = {
 export type SettlementProofContext = {
   auditBucket: string;
   matcherAddress: string;
+  requireBatchProofAnchor?: boolean;
 };
 
 export function startSettler(dex: Contract, db: Db, disputeWindowSec: number, scope: DeploymentScope, proofCtx: SettlementProofContext) {
@@ -79,6 +81,9 @@ export async function settleOneMatch(
     .then((rows) => rows[0]);
   assertSettlementMatchReady(match);
   await assertSettlementProofReady(match, proofCtx);
+  if (proofCtx.requireBatchProofAnchor) {
+    await assertBatchProofAnchorReady(db, match, scope, proofCtx);
+  }
 
   await (dex as any).settleMatch.staticCall(matchId);
   const tx = await (dex as any).settleMatch(matchId);
@@ -133,12 +138,91 @@ async function assertSettlementProofReady(match: NonNullable<Awaited<ReturnType<
   }
 }
 
+export function assertBatchProofAnchorMatches(input: {
+  batchId: bigint;
+  anchor: BatchProofAnchorRow | null | undefined;
+  receipt: Awaited<ReturnType<typeof buildVerifiedBatchAuditReceipt>>["receipt"];
+}) {
+  if (!input.anchor?.proofAnchoredAt) {
+    throw new Error(`settlement blocked: batch ${input.batchId.toString()} proof anchor is missing`);
+  }
+  if (!input.anchor.proofAllSalted) {
+    throw new Error(`settlement blocked: batch ${input.batchId.toString()} proof anchor is not salted`);
+  }
+  const expected = {
+    matchReceiptRoot: toBytes32(input.receipt.roots.matchReceiptRoot),
+    transcriptDigestRoot: toBytes32(input.receipt.roots.transcriptDigestRoot),
+    privateInputRoot: toBytes32(input.receipt.roots.privateInputRoot),
+    outputRoot: toBytes32(input.receipt.roots.outputRoot),
+    matchCount: input.receipt.auditedMatchCount,
+  };
+  const actual = {
+    matchReceiptRoot: normalizeBytes32(input.anchor.proofMatchReceiptRoot),
+    transcriptDigestRoot: normalizeBytes32(input.anchor.proofTranscriptDigestRoot),
+    privateInputRoot: normalizeBytes32(input.anchor.proofPrivateInputRoot),
+    outputRoot: normalizeBytes32(input.anchor.proofOutputRoot),
+    matchCount: Number(input.anchor.proofMatchCount ?? 0),
+  };
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`settlement blocked: batch ${input.batchId.toString()} proof anchor does not match recomputed receipt`);
+  }
+  if (!input.receipt.allChecksOk || !input.receipt.allSalted) {
+    throw new Error(`settlement blocked: batch ${input.batchId.toString()} proof receipt is incomplete`);
+  }
+}
+
+async function assertBatchProofAnchorReady(
+  db: Db,
+  match: NonNullable<Awaited<ReturnType<typeof selectMatchForSettlement>>>,
+  scope: DeploymentScope,
+  proofCtx: SettlementProofContext,
+) {
+  const anchor = await db.select()
+    .from(batchesTable)
+    .where(and(
+      eq(batchesTable.chainId, scope.chainId),
+      eq(batchesTable.dexAddress, scope.dexAddress),
+      eq(batchesTable.id, match.batchId),
+    ))
+    .limit(1)
+    .then((rows) => rows[0]);
+  const { receipt } = await buildVerifiedBatchAuditReceipt({
+    db,
+    batchId: match.batchId,
+    chainId: scope.chainId,
+    dexAddress: scope.dexAddress,
+    auditBucket: proofCtx.auditBucket,
+    matcherAddress: proofCtx.matcherAddress,
+  });
+  assertBatchProofAnchorMatches({ batchId: match.batchId, anchor, receipt });
+}
+
 async function selectMatchForSettlement(db: Db, matchId: bigint, scope: DeploymentScope) {
   return db.select()
     .from(matchesTable)
     .where(scopedIdWhere(matchId, scope))
     .limit(1)
     .then((rows) => rows[0]);
+}
+
+type BatchProofAnchorRow = Pick<
+  typeof batchesTable.$inferSelect,
+  | "proofMatchReceiptRoot"
+  | "proofTranscriptDigestRoot"
+  | "proofPrivateInputRoot"
+  | "proofOutputRoot"
+  | "proofMatchCount"
+  | "proofAllSalted"
+  | "proofAnchoredAt"
+>;
+
+function toBytes32(value: string | null): string | null {
+  if (!value || !/^(0x)?[0-9a-fA-F]{64}$/.test(value)) return null;
+  return value.startsWith("0x") ? value.toLowerCase() : `0x${value.toLowerCase()}`;
+}
+
+function normalizeBytes32(value: string | null | undefined): string | null {
+  return toBytes32(value ?? null);
 }
 
 function matchStatusLabel(value: number): string {

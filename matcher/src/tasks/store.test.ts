@@ -85,6 +85,12 @@ describe("task public redaction", () => {
     const now = new Date("2026-05-26T00:05:00.000Z");
 
     expect(isTaskRetryable({
+      status: "QUEUED",
+      attempts: 0,
+      maxAttempts: 3,
+      nextRunAt: null,
+    }, now)).toBe(true);
+    expect(isTaskRetryable({
       status: "FAILED",
       attempts: 1,
       maxAttempts: 3,

@@ -54,6 +54,7 @@ export async function buildInvariantReport(db: Db, input: {
   limit?: number;
   auditBucket?: string;
   auditPrivacyScanLimit?: number;
+  requireBatchProofAnchorForSettlement?: boolean;
 }): Promise<InvariantReport> {
   const scope = { chainId: input.chainId, dexAddress: normalizeDexAddress(input.dexAddress) };
   const limit = input.limit ?? 25;
@@ -116,6 +117,20 @@ export async function buildInvariantReport(db: Db, input: {
     .orderBy(desc(matchesTable.publishedAt), desc(matchesTable.id))
     .limit(limit);
   for (const match of pendingPastWindow) {
+    if (match.auditS3Key && input.requireBatchProofAnchorForSettlement) {
+      const anchored = await isBatchProofAnchored(db, scope, match.batchId);
+      if (!anchored) {
+        issues.push({
+          severity: "BLOCKING",
+          code: "MATCH_WAITING_FOR_BATCH_PROOF_ANCHOR",
+          message: "Match is past dispute window but its batch proof anchor is required before settlement.",
+          batchId: match.batchId.toString(),
+          matchId: match.id.toString(),
+          taskType: "ANCHOR_BATCH_PROOF",
+        });
+        continue;
+      }
+    }
     issues.push({
       severity: match.auditS3Key ? "BLOCKING" : "WARNING",
       code: match.auditS3Key ? "MATCH_READY_FOR_SETTLEMENT" : "MATCH_WAITING_FOR_AUDIT_RECEIPT",
@@ -126,6 +141,27 @@ export async function buildInvariantReport(db: Db, input: {
       matchId: match.id.toString(),
       taskType: match.auditS3Key ? "SETTLE_MATCH" : "REPAIR_AUDIT_KEYS",
     });
+  }
+
+  if (input.requireBatchProofAnchorForSettlement) {
+    const unanchoredProofBatches = await db.select()
+      .from(batchesTable)
+      .where(and(
+        scopeWhere(batchesTable, scope),
+        eq(batchesTable.status, "MATCHED"),
+        isNull(batchesTable.proofAnchoredAt),
+      ))
+      .orderBy(desc(batchesTable.closedAt), desc(batchesTable.id))
+      .limit(limit);
+    for (const batch of unanchoredProofBatches) {
+      issues.push({
+        severity: "BLOCKING",
+        code: "BATCH_PROOF_ANCHOR_MISSING",
+        message: "Matched batch must anchor its public proof roots before settlement.",
+        batchId: batch.id.toString(),
+        taskType: "ANCHOR_BATCH_PROOF",
+      });
+    }
   }
 
   const unresolvedErrors = await db.select()
@@ -219,6 +255,15 @@ export async function enqueueInvariantRepairs(db: Db, report: InvariantReport) {
         type: "SETTLE_MATCH",
         scope: "OPERATOR",
         matchId: BigInt(issue.matchId),
+        payload: { source: "invariant_reconcile" },
+      }));
+    }
+    if (issue.taskType === "ANCHOR_BATCH_PROOF" && issue.batchId) {
+      tasks.push(await createTaskIfMissing(db, {
+        idempotencyKey: `reconcile:${report.chainId}:${report.dexAddress}:anchor-proof:${issue.batchId}`,
+        type: "ANCHOR_BATCH_PROOF",
+        scope: "OPERATOR",
+        batchId: BigInt(issue.batchId),
         payload: { source: "invariant_reconcile" },
       }));
     }
@@ -448,6 +493,18 @@ async function countOrdersForBatch(db: Db, scope: DeploymentScope, batchId: bigi
 async function readBatchOrderCount(dex: Contract, batchId: bigint) {
   const value = await (dex as any).batchOrderCount(batchId);
   return BigInt(value.toString());
+}
+
+async function isBatchProofAnchored(db: Db, scope: DeploymentScope, batchId: bigint) {
+  const row = await db.select({ proofAnchoredAt: batchesTable.proofAnchoredAt })
+    .from(batchesTable)
+    .where(and(
+      scopeWhere(batchesTable, scope),
+      eq(batchesTable.id, batchId),
+    ))
+    .limit(1)
+    .then((rows) => rows[0]);
+  return !!row?.proofAnchoredAt;
 }
 
 function scopeWhere(table: { chainId: any; dexAddress: any }, scope: DeploymentScope) {

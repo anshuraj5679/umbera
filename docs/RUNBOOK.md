@@ -17,6 +17,7 @@ The invariant report is expected to stay `ok: true`. Privacy warnings can be rec
 It also enqueues `REPAIR_AUDIT_PRIVACY` when legacy audit transcript objects need to be rewritten as receipt-only v2 objects.
 The matcher also runs automatic invariant reconciliation on `MATCHER_INVARIANT_RECONCILE_INTERVAL_SEC`, so repairable health issues are converted into idempotent retry tasks without manual operator action.
 Stale `RUNNING` tasks are recovered on `MATCHER_STALE_TASK_SWEEP_INTERVAL_SEC`; recovered tasks move to `FAILED` with `nextRunAt=now()` when attempts remain, allowing the retry worker to pick them up.
+When `MATCHER_REQUIRE_BATCH_PROOF_ANCHOR_FOR_SETTLEMENT=true`, settlement is blocked until a matched batch has anchored public proof roots. The reconciler enqueues `ANCHOR_BATCH_PROOF` for matched batches missing anchors.
 
 Privacy blockers require immediate investigation:
 

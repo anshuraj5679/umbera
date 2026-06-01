@@ -20,6 +20,7 @@ import { runTask, type TaskRow } from "./tasks/store.js";
 import { matches as matchesTable } from "./db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { verifyAuditTranscriptFromS3 } from "./audit/verifier.js";
+import { anchorBatchProof } from "./audit/batch.js";
 import { repairMissingAuditKeys, startAuditRepairWorker } from "./audit/repair.js";
 import { repairLegacyAuditObjects } from "./audit/privacy.js";
 import { reconcileOrderStatusesFromMatches } from "./orders/lifecycle.js";
@@ -128,6 +129,7 @@ async function main() {
   const settlementProofCtx = {
     auditBucket: cfg.S3_BUCKET,
     matcherAddress: chain.wallet.address,
+    requireBatchProofAnchor: cfg.MATCHER_REQUIRE_BATCH_PROOF_ANCHOR_FOR_SETTLEMENT,
   };
   startSettler(dex, db, disputeWindow, deploymentScope, settlementProofCtx);
   startAuditRepairWorker(db, deploymentScope, cfg.S3_BUCKET, {
@@ -144,6 +146,7 @@ async function main() {
     dexAddress: dep.dex,
     disputeWindowSec: disputeWindow,
     auditBucket: cfg.S3_BUCKET,
+    requireBatchProofAnchorForSettlement: cfg.MATCHER_REQUIRE_BATCH_PROOF_ANCHOR_FOR_SETTLEMENT,
   });
   startRetryWorker(db, {
     CLOSE_BATCH: async (task) => {
@@ -158,6 +161,18 @@ async function main() {
       if (!task.matchId) throw new Error("SETTLE_MATCH task missing matchId");
       return settleOneMatch(dex, db, task.matchId, deploymentScope, settlementProofCtx);
     },
+    ANCHOR_BATCH_PROOF: async (task) => {
+      if (!task.batchId) throw new Error("ANCHOR_BATCH_PROOF task missing batchId");
+      return anchorBatchProof({
+        dex,
+        db,
+        batchId: task.batchId,
+        chainId: cfg.chainId,
+        dexAddress: dep.dex,
+        auditBucket: cfg.S3_BUCKET,
+        matcherAddress: chain.wallet.address,
+      });
+    },
     VERIFY_AUDIT: async (task) => verifyAuditTask(task, db, cfg.S3_BUCKET, chain.wallet.address, deploymentScope),
     REPAIR_AUDIT_KEYS: async (task) => repairAuditKeysTask(task, db, cfg.S3_BUCKET, deploymentScope),
     REPAIR_AUDIT_PRIVACY: async (task) => repairAuditPrivacyTask(task, db, cfg.S3_BUCKET, chain.wallet.address, chain.wallet.signMessage.bind(chain.wallet), deploymentScope),
@@ -168,6 +183,7 @@ async function main() {
   }, {
     intervalSec: cfg.MATCHER_RETRY_WORKER_INTERVAL_SEC,
     leaseSec: cfg.MATCHER_TASK_LEASE_SEC,
+    batchSize: cfg.MATCHER_RETRY_WORKER_BATCH_SIZE,
   });
   const agentOrders = createAgentOrderService({ cfg, deployment: dep });
   startHttp(cfg.HTTP_PORT, db, chain.wallet.address, async (batchId) => {

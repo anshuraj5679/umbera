@@ -11,6 +11,7 @@ export type InvariantReconcilerOptions = {
   dexAddress: string;
   disputeWindowSec: number;
   auditBucket?: string;
+  requireBatchProofAnchorForSettlement?: boolean;
   limit?: number;
 };
 
@@ -53,6 +54,7 @@ export async function runInvariantReconcileOnce(db: Db, options: Omit<InvariantR
     dexAddress: options.dexAddress,
     disputeWindowSec: options.disputeWindowSec,
     auditBucket: options.auditBucket,
+    requireBatchProofAnchorForSettlement: options.requireBatchProofAnchorForSettlement,
     limit: options.limit ?? 25,
   });
   const repairs = await enqueueInvariantRepairs(db, report);

@@ -14,6 +14,7 @@ export const taskTypes = [
   "PUBLISH_MATCH",
   "SETTLE_MATCH",
   "VERIFY_AUDIT",
+  "ANCHOR_BATCH_PROOF",
   "REPAIR_AUDIT_KEYS",
   "REPAIR_AUDIT_PRIVACY",
   "SCRUB_PRIVATE_TASK_DATA",
@@ -204,9 +205,7 @@ export async function leaseTaskForRetry(
     })
     .where(and(
       eq(tasks.id, taskId),
-      eq(tasks.status, "FAILED"),
-      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
-      lte(tasks.nextRunAt, now),
+      runnableTaskWhere(now),
     ));
   const leased = await taskById(db, taskId);
   if (leased?.status !== "RUNNING" || leased.leaseOwner !== lease.owner) return null;
@@ -248,11 +247,7 @@ export async function recentTasks(db: Db, limit: number) {
 export async function retryableTasks(db: Db, now = new Date(), limit = 20) {
   return db.select()
     .from(tasks)
-    .where(and(
-      eq(tasks.status, "FAILED"),
-      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
-      lte(tasks.nextRunAt, now),
-    ))
+    .where(runnableTaskWhere(now))
     .orderBy(tasks.nextRunAt, tasks.createdAt)
     .limit(limit);
 }
@@ -393,6 +388,7 @@ export function publicTaskEventRow(row: TaskEventRow) {
 }
 
 export function isTaskRetryable(row: Pick<TaskRow, "status" | "attempts" | "maxAttempts" | "nextRunAt">, now = new Date()) {
+  if (row.status === "QUEUED") return row.attempts < row.maxAttempts;
   return row.status === "FAILED"
     && row.attempts < row.maxAttempts
     && row.nextRunAt !== null
@@ -426,4 +422,18 @@ function errorMessage(error: unknown) {
 function retryDelayMs(attempts: number) {
   const retryAttempt = Math.max(1, attempts);
   return Math.min(30_000 * 2 ** (retryAttempt - 1), 5 * 60_000);
+}
+
+function runnableTaskWhere(now: Date) {
+  return or(
+    and(
+      eq(tasks.status, "QUEUED"),
+      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
+    ),
+    and(
+      eq(tasks.status, "FAILED"),
+      sql`${tasks.attempts} < ${tasks.maxAttempts}`,
+      lte(tasks.nextRunAt, now),
+    ),
+  );
 }
