@@ -21,14 +21,17 @@
 import { expect } from "chai";
 import hre, { ethers } from "hardhat";
 import { Encryptable, FheTypes, MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY } from "@cofhe/sdk";
-import { createPublicClient, createWalletClient, custom, encodePacked, keccak256 } from "viem";
+import { createCofheClient, createCofheConfig } from "@cofhe/sdk/node";
+import { hardhat as cofheHardhat } from "@cofhe/sdk/chains";
+import { createPublicClient, createWalletClient, custom } from "viem";
 import { hardhat as viemHardhat } from "viem/chains";
-import { privateKeyToAccount, sign } from "viem/accounts";
+import { privateKeyToAccount } from "viem/accounts";
 
 // Encryption can take a few seconds the first time the tfhe wasm warms up.
 const ENCRYPT_TIMEOUT_MS = 120_000;
 const HARDHAT_ALICE_PRIVATE_KEY = "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6";
-const SDK_LEGACY_MOCK_ZK_VERIFIER = "0x0000000000000000000000000000000000000100";
+const COFHE_HARDHAT_PLUGIN_MOCK_ZK_VERIFIER = "0x0000000000000000000000000000000000000100";
+const SDK_MOCK_ZK_VERIFIER = "0x0000000000000000000000000000000000005001";
 const MOCK_ZK_VERIFIER_ABI = [
   {
     type: "function",
@@ -193,44 +196,56 @@ async function encryptInputsForAlice(values: bigint[]) {
   const transport = custom(hre.network.provider as any);
   const publicClient = createPublicClient({ chain: viemHardhat, transport });
   const aliceAccount = privateKeyToAccount(HARDHAT_ALICE_PRIVATE_KEY);
+  const walletClient = createWalletClient({ chain: viemHardhat, transport, account: aliceAccount });
   const zkvWalletClient = createWalletClient({
     chain: viemHardhat,
     transport,
     account: privateKeyToAccount(MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY),
   });
-  const inputs = values.map((value) => Encryptable.uint128(value));
-  const utypes = inputs.map((input) => input.utype);
-  const rawValues = inputs.map((input) => BigInt(input.data));
-  const ctHashes = await publicClient.readContract({
-    address: SDK_LEGACY_MOCK_ZK_VERIFIER,
-    abi: MOCK_ZK_VERIFIER_ABI,
-    functionName: "zkVerifyCalcCtHashesPacked",
-    args: [rawValues, utypes, aliceAccount.address, 0, BigInt(viemHardhat.id)],
-  });
+  await ensureSdkMockVerifierAddress(publicClient);
 
-  await zkvWalletClient.writeContract({
-    address: SDK_LEGACY_MOCK_ZK_VERIFIER,
+  const cofhe = createCofheClient(createCofheConfig({
+    supportedChains: [cofheHardhat],
+    fheKeyStorage: null,
+    mocks: { decryptDelay: 0, encryptDelay: 0 },
+    _internal: { zkvWalletClient: zkvWalletClient as any },
+  }));
+
+  await cofhe.connect(publicClient as any, walletClient as any);
+
+  // This intentionally mirrors the browser path in frontend/lib/cofhe.tsx:
+  // values -> Encryptable.uint128 -> client.encryptInputs(...).execute().
+  const encrypted = await cofhe
+    .encryptInputs(values.map((value) => Encryptable.uint128(value)))
+    .execute();
+
+  // @cofhe/sdk mock mode writes plaintext test handles to its own mock verifier
+  // address. The pinned cofhe-hardhat-plugin used by these contracts keeps the
+  // verifier at 0x...0100, so mirror the same handles into the plugin store.
+  // The encrypted calldata and signatures still come from @cofhe/sdk.
+  await walletClient.writeContract({
+    address: COFHE_HARDHAT_PLUGIN_MOCK_ZK_VERIFIER,
     abi: MOCK_ZK_VERIFIER_ABI,
     functionName: "insertPackedCtHashes",
-    args: [ctHashes, rawValues],
+    args: [encrypted.map((item) => item.ctHash), values],
     chain: viemHardhat,
-    account: zkvWalletClient.account!,
+    account: aliceAccount,
   });
 
-  return Promise.all(ctHashes.map(async (ctHash, index) => {
-    const packed = encodePacked(
-      ["uint256", "uint8", "uint8", "address", "uint256"],
-      [ctHash, utypes[index]!, 0, aliceAccount.address, BigInt(viemHardhat.id)],
-    );
-    return {
-      ctHash,
-      securityZone: 0,
-      utype: FheTypes.Uint128,
-      signature: await sign({
-        hash: keccak256(packed),
-        privateKey: MOCKS_ZK_VERIFIER_SIGNER_PRIVATE_KEY,
-        to: "hex",
-      }),
-    };
-  }));
+  return encrypted;
+}
+
+async function ensureSdkMockVerifierAddress(publicClient: ReturnType<typeof createPublicClient>) {
+  const sdkCode = await publicClient.getCode({ address: SDK_MOCK_ZK_VERIFIER });
+  if (sdkCode && sdkCode !== "0x") return;
+
+  const pluginCode = await publicClient.getCode({ address: COFHE_HARDHAT_PLUGIN_MOCK_ZK_VERIFIER });
+  if (!pluginCode || pluginCode === "0x") {
+    throw new Error(`CoFHE plugin MockZkVerifier missing at ${COFHE_HARDHAT_PLUGIN_MOCK_ZK_VERIFIER}`);
+  }
+
+  await hre.network.provider.request({
+    method: "hardhat_setCode",
+    params: [SDK_MOCK_ZK_VERIFIER, pluginCode],
+  });
 }
