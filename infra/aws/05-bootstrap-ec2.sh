@@ -15,7 +15,7 @@ Requires=docker.service
 EnvironmentFile=/etc/darkpool/matcher.env
 ExecStartPre=-/usr/bin/docker stop darkpool-matcher
 ExecStartPre=-/usr/bin/docker rm  darkpool-matcher
-ExecStart=/usr/bin/docker run --name darkpool-matcher --rm --env-file /etc/darkpool/matcher.env -p 8080:8080 ghcr.io/anshuraj5679/obsidian-matcher:latest
+ExecStart=/usr/bin/docker run --name darkpool-matcher --rm --env-file /etc/darkpool/matcher.env -p 8080:8080 ghcr.io/anshuraj5679/umbra-matcher:latest
 ExecStop=/usr/bin/docker stop darkpool-matcher
 Restart=always
 

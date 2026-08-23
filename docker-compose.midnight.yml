@@ -1,0 +1,41 @@
+# ============================================================================
+#  UMBRA — Midnight Development Infrastructure
+# ============================================================================
+#  Runs the ZK proof server required for local Compact circuit execution.
+#  The proof server generates zero-knowledge proofs locally so private data
+#  never leaves the developer's machine.
+#
+#  Usage:
+#    docker compose -f docker-compose.midnight.yml up -d
+#
+#  Requirements:
+#    - Docker Desktop installed and running
+#    - First startup downloads ZK parameters (~2-5 min depending on network)
+#    - Use a named volume to cache parameters across restarts
+#
+#  IMPORTANT: The proof server image tag MUST match the Midnight ledger
+#  version used by Preprod. Check the support matrix at:
+#  https://docs.midnight.network/
+# ============================================================================
+
+services:
+  proof-server:
+    image: midnightntwrk/proof-server:8.1.0
+    container_name: umbra-proof-server
+    ports:
+      - "6300:6300"
+    environment:
+      - RUST_BACKTRACE=full
+    volumes:
+      - proof-server-cache:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+volumes:
+  proof-server-cache:
+    name: umbra-proof-server-cache

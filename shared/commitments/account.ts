@@ -1,9 +1,9 @@
 import { encodeAbiParameters, getAddress, keccak256, parseAbiParameters, type Hex } from "viem";
 
-const OWNER_COMMITMENT_VERSION = "obsidian.account.owner.v1";
-const ACCOUNT_COMMITMENT_VERSION = "obsidian.account.commitment.v1";
-const ACCOUNT_NULLIFIER_VERSION = "obsidian.account.nullifier.v1";
-const ACCOUNT_SALT_VERSION = "obsidian.account.salt.v1";
+const OWNER_COMMITMENT_VERSION = "umbra.account.owner.v1";
+const ACCOUNT_COMMITMENT_VERSION = "umbra.account.commitment.v1";
+const ACCOUNT_NULLIFIER_VERSION = "umbra.account.nullifier.v1";
+const ACCOUNT_SALT_VERSION = "umbra.account.salt.v1";
 
 export type OwnerCommitmentInput = {
   chainId: number;

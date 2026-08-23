@@ -115,7 +115,7 @@ export async function createRelayerCheckpoint(db: Db, input: {
   const stateRoot = ethers.solidityPackedKeccak256(
     ["string", "uint256", "address", "uint256", "bytes32", "uint256", "uint256"],
     [
-      "obsidian.relayer.state.v1",
+      "umbra.relayer.state.v1",
       input.chainId,
       ethers.getAddress(input.dexAddress),
       input.confirmedBlock,
@@ -148,7 +148,7 @@ function orderSalt(input: IndexedOrderForCommitment) {
   return ethers.solidityPackedKeccak256(
     ["string", "uint256", "address", "uint256", "bytes32", "uint256"],
     [
-      "obsidian.relayer.order-salt.v1",
+      "umbra.relayer.order-salt.v1",
       input.chainId,
       ethers.getAddress(input.dexAddress),
       input.orderId,

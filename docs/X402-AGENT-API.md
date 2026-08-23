@@ -17,7 +17,7 @@ The x402 payment is only the access/payment layer. It must not be used as the da
 - Access token: opaque HMAC bearer token; the database stores only its hash, expiry, scope, and usage count.
 - DEX token setup: the delegated trader must hold wrapped encrypted balances. The API auto-sets DEX operator approval on both encrypted wrappers for the selected pair when missing.
 
-The free x402.org facilitator is useful only for the current challenge E2E. It is not the intended alpha privacy path because the Obsidian DEX deployment is on Arbitrum Sepolia. For a real Arbitrum-only agent flow, keep x402 disabled until an Arbitrum-compatible facilitator is configured, or run a custom facilitator for plain Arbitrum payment tokens.
+The free x402.org facilitator is useful only for the current challenge E2E. It is not the intended alpha privacy path because the Umbra DEX deployment is on Arbitrum Sepolia. For a real Arbitrum-only agent flow, keep x402 disabled until an Arbitrum-compatible facilitator is configured, or run a custom facilitator for plain Arbitrum payment tokens.
 
 ## Routes
 
@@ -101,7 +101,7 @@ X402_AGENT_FACILITATOR_URL=https://x402.org/facilitator
 X402_AGENT_NETWORK=eip155:84532
 X402_AGENT_PRICE=$0.01
 X402_AGENT_PAY_TO=0xReceiver
-X402_AGENT_RESOURCE_URL=https://obsidian-darkpool.vercel.app/api/agent/access
+X402_AGENT_RESOURCE_URL=https://umbra-darkpool.vercel.app/api/agent/access
 X402_AGENT_SYNC_FACILITATOR_ON_START=true
 AGENT_ACCESS_TOKEN_SECRET=replace-with-long-random-secret
 AGENT_ACCESS_TOKEN_TTL_SEC=600

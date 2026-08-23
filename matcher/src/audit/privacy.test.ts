@@ -23,13 +23,13 @@ describe("audit object privacy scanner", () => {
             }
             : command.input.Key === "bad-receipt.json"
               ? {
-                schema: "obsidian.match.proof-receipt.v2",
+                schema: "umbra.match.proof-receipt.v2",
                 privateInputRoot: "root",
                 outputRoot: "root",
                 auction: { inputOrders: [{ side: "BUY" }] },
               }
               : {
-                schema: "obsidian.match.proof-receipt.v2",
+                schema: "umbra.match.proof-receipt.v2",
                 privateInputRoot: "root",
                 outputRoot: "root",
               },
@@ -56,7 +56,7 @@ describe("audit object privacy scanner", () => {
         code: "AUDIT_PRIVATE_FIELDS",
         matchId: "3",
         batchId: "9",
-        schema: "obsidian.match.proof-receipt.v2",
+        schema: "umbra.match.proof-receipt.v2",
         forbiddenFields: ["auction", "inputOrders", "side"],
       },
     ]);
@@ -64,7 +64,7 @@ describe("audit object privacy scanner", () => {
 
   it("does not treat receipt commitment roots as private transcript fields", () => {
     expect(forbiddenAuditFields({
-      schema: "obsidian.match.proof-receipt.v2",
+      schema: "umbra.match.proof-receipt.v2",
       privateInputRoot: "root",
       outputRoot: "root",
       commitments: { salted: true },
@@ -73,7 +73,7 @@ describe("audit object privacy scanner", () => {
 
   it("builds receipt-only replacement bodies without private transcript values", () => {
     const body = buildReceiptOnlyAuditBody({
-      schema: "obsidian.match.proof-receipt.v1",
+      schema: "umbra.match.proof-receipt.v1",
       matchId: "42",
       batchId: "7",
       pairId: 0,
@@ -112,7 +112,7 @@ describe("audit object privacy scanner", () => {
     });
 
     expect(body).toMatchObject({
-      schema: "obsidian.match.proof-receipt.v2",
+      schema: "umbra.match.proof-receipt.v2",
       matchId: "42",
       batchId: "7",
       orderAId: "9",

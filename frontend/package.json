@@ -18,7 +18,12 @@
     "demo:settle": "node scripts/demo-market.mjs settle"
   },
   "dependencies": {
-    "@cofhe/sdk": "^0.5.2",
+    "@midnight-ntwrk/midnight-js-compact": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-contracts": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "^4.0.4",
+    "@midnight-ntwrk/midnight-js-types": "^4.0.4",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-label": "^2.1.0",

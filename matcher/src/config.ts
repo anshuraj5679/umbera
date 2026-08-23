@@ -20,12 +20,12 @@ const optionalEnv = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((value) 
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  ARB_SEPOLIA_RPC_URL: z.string().url(),
-  ARB_SEPOLIA_WS_URL: z.string().url(),
+  ARB_SEPOLIA_RPC_URL: optionalEnv(z.string().url()).default("https://sepolia-rollup.arbitrum.io/rpc"),
+  ARB_SEPOLIA_WS_URL: optionalEnv(z.string().url()).default("wss://sepolia-rollup.arbitrum.io/ws"),
   MATCHER_PRIVATE_KEY: optionalEnv(privateKey),
   MATCHER_SECRET_ID: optionalEnv(z.string()),
-  RDS_URL: z.string().url(),
-  S3_BUCKET: z.string(),
+  RDS_URL: z.string().url().default("postgres://darkpool:postgres@localhost:5432/darkpool"),
+  S3_BUCKET: z.string().default("darkpool-matcher-logs-dev"),
   S3_REGION: z.string().default("ap-south-1"),
   HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),

@@ -1,9 +1,12 @@
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
+import { createConfig, http } from "wagmi";
 import { arbitrumSepolia } from "wagmi/chains";
+import { injected } from "wagmi/connectors";
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "Dark Pool DEX",
-  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_ID!,
+export const wagmiConfig = createConfig({
   chains: [arbitrumSepolia],
+  connectors: [injected()],
+  transports: {
+    [arbitrumSepolia.id]: http(),
+  },
   ssr: true,
 });

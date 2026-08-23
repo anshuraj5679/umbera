@@ -100,7 +100,7 @@ describe("public matcher API redaction", () => {
       auction: { recomputed: true, ok: true, reason: "contains private input orders" },
       transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
       proofReceipt: {
-        schema: "obsidian.match.proof-receipt.v1",
+        schema: "umbra.match.proof-receipt.v1",
         matchId: "3",
         batchId: "52",
         pairId: 0,
@@ -138,7 +138,7 @@ describe("public matcher API redaction", () => {
       auctionRecomputed: true,
       transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
       receipt: {
-        schema: "obsidian.match.proof-receipt.v1",
+        schema: "umbra.match.proof-receipt.v1",
         matchId: "3",
         batchId: "52",
         pairId: 0,
@@ -192,7 +192,7 @@ describe("public matcher API redaction", () => {
           auction: { recomputed: true, ok: true, reason: "contains private input orders" },
           transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
           proofReceipt: {
-            schema: "obsidian.match.proof-receipt.v1",
+            schema: "umbra.match.proof-receipt.v1",
             matchId: "3",
             batchId: "52",
             pairId: 0,
@@ -225,7 +225,7 @@ describe("public matcher API redaction", () => {
     expect(row.ok).toBe(false);
     expect(row.batchId).toBe("52");
     expect(row.receipt).toMatchObject({
-      schema: "obsidian.batch.proof-receipt.v1",
+      schema: "umbra.batch.proof-receipt.v1",
       batchId: "52",
       chainId: 421614,
       dexAddress: "0x1111111111111111111111111111111111111111",
@@ -270,7 +270,7 @@ describe("public matcher API redaction", () => {
           auction: { recomputed: true, ok: true, reason: "contains private input orders" },
           transcript: { schema: "match-v2-private-auction-inputs", publishedAt: "2026-05-27T12:17:17.167Z" },
           proofReceipt: {
-            schema: "obsidian.match.proof-receipt.v1",
+            schema: "umbra.match.proof-receipt.v1",
             matchId: "3",
             batchId: "52",
             pairId: 0,

@@ -8,7 +8,7 @@
 
 ## Health
 
-- Public health: `https://obsidian-darkpool.vercel.app/api/health`
+- Public health: `https://umbra-darkpool.vercel.app/api/health`
 - Direct matcher health: `http://<matcher-host>:8080/health`
 - Operator invariants: signed `GET /operator/invariants`
 - Operator reconcile: signed `POST /operator/reconcile`

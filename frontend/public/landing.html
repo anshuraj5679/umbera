@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Obsidian — Encrypted Dark Pool DEX</title>
+<title>Umbra — Encrypted Dark Pool DEX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
@@ -1058,7 +1058,7 @@
 
     <!-- Loader -->
     <div class="hero__loader" id="loader">
-      <span>FORGING OBSIDIAN</span>
+      <span>FORGING UMBRA</span>
       <div class="hero__loader-bar"></div>
     </div>
   </section>
@@ -1172,7 +1172,7 @@
     <div class="inst__layout">
       <div>
         <p class="inst__lead reveal" data-d="1">
-          Built for desks that move <em>size</em>. Obsidian gives institutional traders the
+          Built for desks that move <em>size</em>. Umbra gives institutional traders the
           discretion of a traditional dark pool with the settlement guarantees of a public
           chain — encrypted end-to-end, audited in cleartext only after the match.
         </p>
@@ -1249,7 +1249,7 @@
   <footer class="footer snap" id="footer" data-screen-label="04 Footer">
     <div class="footer__top">
       <div>
-        <div class="footer__brand">Obsidian.</div>
+        <div class="footer__brand">Umbra.</div>
         <p class="footer__brand-sub">An encrypted on-chain dark pool for institutional size. Powered by Fhenix CoFHE on Arbitrum.</p>
       </div>
       <div class="footer__col">
@@ -1281,7 +1281,7 @@
       </div>
     </div>
     <div class="footer__bottom">
-      <span>© 2026 Obsidian Labs · Encrypted by design</span>
+      <span>© 2026 Umbra Labs · Encrypted by design</span>
       <span>v0.1.3 · Arbitrum Sepolia</span>
     </div>
   </footer>
@@ -1363,6 +1363,8 @@
     import * as THREE from "three";
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
+    import { FontLoader } from "three/addons/loaders/FontLoader.js";
+    import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
 
     const mount = document.getElementById("threeMount");
     const loader = document.getElementById("loader");
@@ -1457,6 +1459,40 @@
       (gltf) => {
         const model = gltf.scene;
 
+        // Hide GLB text node "ObsidianText" so we can render "Umbra"
+        const oldTextNode = model.getObjectByName("ObsidianText") || model.getObjectByName("UmbraText");
+        if (oldTextNode) {
+          oldTextNode.visible = false;
+        }
+
+        // Load font and add 3D 3D text "Umbra"
+        const fontLoader = new FontLoader();
+        fontLoader.load("/landing-assets/helvetiker_bold.typeface.json", (font) => {
+          const textGeo = new TextGeometry("Umbra", {
+            font: font,
+            size: 0.75,
+            height: 0.22,
+            curveSegments: 12,
+            bevelEnabled: true,
+            bevelThickness: 0.035,
+            bevelSize: 0.02,
+            bevelOffset: 0,
+            bevelSegments: 5,
+          });
+          textGeo.center();
+
+          const textMat = new THREE.MeshStandardMaterial({
+            color: 0xf0f1f5,
+            metalness: 0.85,
+            roughness: 0.22,
+            envMapIntensity: 1.5,
+          });
+
+          const textMesh = new THREE.Mesh(textGeo, textMat);
+          textMesh.position.set(0.5, 0.02, 0);
+          model.add(textMesh);
+        });
+
         // Auto-center + scale
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
@@ -1469,8 +1505,8 @@
         // Lift the model up so it sits in the upper-mid of the hero
         modelGroup.position.y = 1.1;
 
-        // Pick the rock by name (confirmed: "ObsidianRock")
-        rockNode = model.getObjectByName("ObsidianRock");
+        // Pick the rock by name (confirmed: "ObsidianRock" in GLB)
+        rockNode = model.getObjectByName("ObsidianRock") || model.getObjectByName("UmbraRock");
 
         // Make sure world matrices are up to date before computing rock center
         model.updateMatrixWorld(true);
@@ -1491,7 +1527,7 @@
           rockPivot.attach(rockNode);
         }
 
-        // Enhance materials — push toward obsidian look
+        // Enhance materials — push toward umbra look
         model.traverse((c) => {
           if (c.isMesh && c.material) {
             const mats = Array.isArray(c.material) ? c.material : [c.material];

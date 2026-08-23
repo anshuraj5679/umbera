@@ -32,7 +32,14 @@ const nextConfig = {
     ];
   },
   webpack: (config) => {
-    config.externals.push("pino-pretty", "lokijs", "encoding");
+    config.externals.push("pino-pretty", "lokijs", "encoding", "@coinbase/cdp-sdk", "@x402/evm", "@react-native-async-storage/async-storage");
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@x402/evm/upto/client": false,
+      "@x402/evm": false,
+      "@coinbase/cdp-sdk": false,
+      "@react-native-async-storage/async-storage": false,
+    };
     config.resolve.fallback = {
       ...(config.resolve.fallback || {}),
       fs: false,

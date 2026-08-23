@@ -6,8 +6,8 @@ import { BatchStrip } from "@/components/BatchStrip";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Obsidian — Dark Pool",
-  description: "Encrypted batch-auction DEX on Fhenix CoFHE",
+  title: "UMBRA — Confidential Dark Pool",
+  description: "UMBRA is a privacy-first confidential trading application designed to protect sensitive onchain trading intent.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

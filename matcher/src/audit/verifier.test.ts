@@ -69,7 +69,7 @@ describe("audit verifier", () => {
     });
     expect(result.auction.recomputed).toBe(false);
     expect(result.proofReceipt).toMatchObject({
-      schema: "obsidian.match.proof-receipt.v1",
+      schema: "umbra.match.proof-receipt.v1",
       matchId: "42",
       batchId: "7",
       pairId: 0,
@@ -221,13 +221,13 @@ describe("audit verifier", () => {
     expect(result.transcript.schema).toBe("match-v2-private-auction-inputs");
     expect(result.proofReceipt.commitments).toEqual({
       privateInputRoot: digest({
-        schema: "obsidian.audit.private-input-root.v1",
+        schema: "umbra.audit.private-input-root.v1",
         privateProofSalt: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         inputOrders: body.auction.inputOrders,
       }),
       privateInputCount: 2,
       outputRoot: digest({
-        schema: "obsidian.audit.output-root.v1",
+        schema: "umbra.audit.output-root.v1",
         privateProofSalt: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         matches: body.auction.matches,
       }),
@@ -242,7 +242,7 @@ describe("audit verifier", () => {
   it("verifies receipt-only audit objects without decrypted auction inputs", async () => {
     const wallet = Wallet.createRandom();
     const body = {
-      schema: "obsidian.match.proof-receipt.v2",
+      schema: "umbra.match.proof-receipt.v2",
       matchId: "42",
       batchId: "7",
       pairId: 0,
@@ -279,7 +279,7 @@ describe("audit verifier", () => {
     expect(result.ok).toBe(true);
     expect(result.auction).toMatchObject({ recomputed: false, ok: null });
     expect(result.transcript.schema).toBe("receipt-v2");
-    expect(result.proofReceipt.schema).toBe("obsidian.match.proof-receipt.v2");
+    expect(result.proofReceipt.schema).toBe("umbra.match.proof-receipt.v2");
     expect(result.proofReceipt.commitments).toEqual({
       privateInputRoot: body.privateInputRoot,
       privateInputCount: 2,

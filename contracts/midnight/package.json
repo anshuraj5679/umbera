@@ -1,0 +1,13 @@
+{
+  "name": "@umbra/contracts-compact",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "compact compile src/umbra.compact --out-dir dist",
+    "compile": "compact compile src/umbra.compact --out-dir dist"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/compactc": "^0.8.0"
+  }
+}

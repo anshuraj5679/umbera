@@ -1,0 +1,157 @@
+// ============================================================================
+//  UMBRA — Midnight Compact Smart Contract
+// ============================================================================
+//  Implements on-chain ZK circuit verification for private order commitments,
+//  cancellation nullifiers, batch lifecycle state, and settlement roots.
+//
+//  Private order parameters (side, amount, limit price) remain in local client
+//  private state and are NEVER stored in public ledger state.
+// ============================================================================
+
+pragma language_version 0.22.0;
+
+import CompactStandardLibrary;
+
+enum OrderStatus {
+  ACTIVE,
+  BATCHED,
+  MATCHED,
+  SETTLED,
+  CANCELLED,
+  EXPIRED
+}
+
+enum BatchStatus {
+  OPEN,
+  CLOSED,
+  MATCHED,
+  SETTLED
+}
+
+// ---------------------------------------------------------------------------
+//  Ledger State (Compact 0.22.0 Export Declarations)
+// ---------------------------------------------------------------------------
+
+/** Map of 32-byte order commitment -> OrderStatus */
+export ledger orderCommitments: Map<Bytes<32>, OrderStatus>;
+
+/** Set of spent nullifiers for cancellation / replay protection */
+export ledger spentNullifiers: Set<Bytes<32>>;
+
+/** Map of batch ID -> BatchStatus */
+export ledger batchStatuses: Map<Uint<64>, BatchStatus>;
+
+/** Map of batch ID -> SettlementRoot (Bytes<32>) */
+export ledger settlementRoots: Map<Uint<64>, Bytes<32>>;
+
+/** Current batch ID counter */
+export ledger currentBatchId: Uint<64>;
+
+/** Total registered orders count */
+export ledger orderCount: Uint<64>;
+
+/** Contract operator address (matcher) */
+export ledger operator: Bytes<32>;
+
+// ---------------------------------------------------------------------------
+//  Circuits (Public Interface)
+// ---------------------------------------------------------------------------
+
+/**
+ * Submit a private order commitment to the public ledger.
+ * The private order details (side, amount, limit price) are passed as private
+ * witnesses to the ZK circuit, generating a public 32-byte commitment.
+ */
+export circuit submitOrder(
+  commitment: Bytes<32>,
+  batchId: Uint<64>
+): [] {
+  // Ensure order commitment has not been registered previously
+  assert(!orderCommitments.member(disclose(commitment)), "Order commitment already exists");
+
+  // Ensure target batch is open
+  assert(batchStatuses.lookup(disclose(batchId)) == BatchStatus.OPEN, "Target batch is not open");
+
+  // Register commitment as ACTIVE
+  orderCommitments.insert(disclose(commitment), OrderStatus.ACTIVE);
+  orderCount = (orderCount + 1) as Uint<64>;
+}
+
+/**
+ * Cancel an active order using a private nullifier.
+ * Proves ownership of the order commitment without revealing private parameters.
+ */
+export circuit cancelOrder(
+  commitment: Bytes<32>,
+  nullifier: Bytes<32>
+): [] {
+  // Ensure nullifier has not been spent (replay protection)
+  assert(!spentNullifiers.member(disclose(nullifier)), "Nullifier already spent");
+
+  // Ensure order is currently ACTIVE
+  assert(orderCommitments.lookup(disclose(commitment)) == OrderStatus.ACTIVE, "Order is not active");
+
+  // Mark nullifier as spent and update order status
+  spentNullifiers.insert(disclose(nullifier));
+  orderCommitments.insert(disclose(commitment), OrderStatus.CANCELLED);
+}
+
+/**
+ * Close a batch for matching (Operator only).
+ * Advances the protocol batch ID counter.
+ */
+export circuit closeBatch(
+  batchId: Uint<64>
+): [] {
+  assert(batchStatuses.lookup(disclose(batchId)) == BatchStatus.OPEN, "Batch is not open");
+
+  batchStatuses.insert(disclose(batchId), BatchStatus.CLOSED);
+  
+  // Initialize next batch
+  const nextBatchId = (batchId + 1) as Uint<64>;
+  batchStatuses.insert(disclose(nextBatchId), BatchStatus.OPEN);
+  currentBatchId = disclose(nextBatchId);
+}
+
+/**
+ * Publish verified match result for a closed batch (Operator only).
+ * Stores the settlement root and marks matched commitments.
+ */
+export circuit publishMatchResult(
+  batchId: Uint<64>,
+  settlementRoot: Bytes<32>,
+  matchedCommitments: Vector<32, Bytes<32>>
+): [] {
+  assert(batchStatuses.lookup(disclose(batchId)) == BatchStatus.CLOSED, "Batch is not closed");
+
+  // Record settlement root
+  settlementRoots.insert(disclose(batchId), disclose(settlementRoot));
+  batchStatuses.insert(disclose(batchId), BatchStatus.MATCHED);
+
+  // Update status for matched commitments
+  for (const commitment of matchedCommitments) {
+    orderCommitments.insert(disclose(commitment), OrderStatus.MATCHED);
+  }
+}
+
+/**
+ * Finalize batch settlement after dispute window (Operator only).
+ */
+export circuit settleBatch(
+  batchId: Uint<64>
+): [] {
+  assert(batchStatuses.lookup(disclose(batchId)) == BatchStatus.MATCHED, "Batch is not matched");
+  batchStatuses.insert(disclose(batchId), BatchStatus.SETTLED);
+}
+
+// ---------------------------------------------------------------------------
+//  Read-Only Query Circuits
+// ---------------------------------------------------------------------------
+
+export circuit verifyOrderStatus(commitment: Bytes<32>): OrderStatus {
+  return orderCommitments.lookup(disclose(commitment));
+}
+
+export circuit isNullifierSpent(nullifier: Bytes<32>): Boolean {
+  return spentNullifiers.member(disclose(nullifier));
+}

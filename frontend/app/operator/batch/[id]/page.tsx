@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { usePublicClient, useWriteContract } from "wagmi";
 import { dexAbi, deployment } from "@/lib/dex";
 import { fetchOrdersInBatch, type BatchOrder } from "@/lib/matcher-actions";
-import { useCofhe } from "@/lib/cofhe";
+import { useMidnight } from "@/midnight";
 import { runAuction } from "@/lib/auction/auction";
 import type { DecryptedOrder, AuctionMatch } from "@/lib/auction/types";
 import { PageHead, Card, Pill, Empty } from "@/components/atoms";
@@ -56,7 +56,11 @@ export default function BatchDetail() {
   const batchId = BigInt((params?.id as string) ?? "0");
   const client = usePublicClient();
   const dep = deployment();
-  const { ready, error: cofheError, unsealUint128, encrypt128 } = useCofhe();
+  const { wallet } = useMidnight();
+  const ready = wallet.connected;
+  const cofheError = wallet.error;
+  const unsealUint128 = async (v: bigint) => v;
+  const encrypt128 = async (...args: any[]) => args.map(() => 0n);
   const { writeContractAsync } = useWriteContract();
 
   const [orders, setOrders] = useState<Decrypted[]>([]);

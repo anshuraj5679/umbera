@@ -1,7 +1,7 @@
 import { encodeAbiParameters, getAddress, keccak256, parseAbiParameters, type Hex } from "viem";
 
-const ORDER_COMMITMENT_VERSION = "obsidian.order.commitment.v1";
-const ORDER_NULLIFIER_VERSION = "obsidian.order.nullifier.v1";
+const ORDER_COMMITMENT_VERSION = "umbra.order.commitment.v1";
+const ORDER_NULLIFIER_VERSION = "umbra.order.nullifier.v1";
 const ZERO_ACCOUNT_COMMITMENT = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 export type OrderCommitmentInput = {

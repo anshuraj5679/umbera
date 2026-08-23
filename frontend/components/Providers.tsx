@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { wagmiConfig } from "@/lib/wagmi";
-import { CofheProvider } from "@/lib/cofhe";
+import { MidnightProvider } from "@/midnight/provider";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={qc}>
         <RainbowKitProvider theme={darkTheme()}>
-          <CofheProvider>{children}</CofheProvider>
+          <MidnightProvider>{children}</MidnightProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

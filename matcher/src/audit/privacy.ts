@@ -35,7 +35,8 @@ export type AuditObjectPrivacyRepairResult = {
   issues: AuditObjectPrivacyIssue[];
 };
 
-const RECEIPT_V2_SCHEMA = "obsidian.match.proof-receipt.v2";
+const RECEIPT_V3_SCHEMA = "umbra.match.proof-receipt.v3";
+const RECEIPT_V2_SCHEMA = "umbra.match.proof-receipt.v2";
 const defaultS3Client = new S3Client({ region: process.env.S3_REGION ?? "ap-south-1" });
 const FORBIDDEN_AUDIT_FIELD_NAMES = new Set([
   "auction",

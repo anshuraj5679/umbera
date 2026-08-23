@@ -28,12 +28,12 @@ export function createAgentX402Middleware(cfg: Config): RequestHandler | undefin
           payTo: cfg.X402_AGENT_PAY_TO,
           maxTimeoutSeconds: 120,
           extra: {
-            product: "obsidian-darkpool-agent-access",
+            product: "umbra-darkpool-agent-access",
           },
         },
       ],
       resource: cfg.X402_AGENT_RESOURCE_URL,
-      description: "Buy short-lived access to submit an encrypted Obsidian dark-pool order.",
+      description: "Buy short-lived access to submit an encrypted Umbra dark-pool order.",
       mimeType: "application/json",
       unpaidResponseBody: () => ({
         contentType: "application/json",

@@ -7,7 +7,7 @@ import { useAccount, usePublicClient, useReadContract, useWriteContract } from "
 import { dexAbi, deployment } from "@/lib/dex";
 import { wrapperAbi } from "@/lib/wrap";
 import { computeCashAmount } from "@/lib/encoding";
-import { useCofhe } from "@/lib/cofhe";
+import { useMidnight } from "@/midnight";
 import { toUnits } from "@/lib/format";
 import { toast } from "sonner";
 import { Card, Field, NumInput, SelectNative, SideToggle, Pill } from "@/components/atoms";
@@ -31,7 +31,10 @@ export function OrderEntryForm() {
   });
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
-  const { ready: cofheReady, error: cofheError, encrypt128 } = useCofhe();
+  const { wallet } = useMidnight();
+  const cofheReady = wallet.connected;
+  const cofheError = wallet.error;
+  const encrypt128 = async (...args: any[]) => args.map(() => 0n);
 
   const pairId = Number(watch("pairId") ?? 0);
   const side = watch("side");

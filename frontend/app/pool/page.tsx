@@ -1,6 +1,7 @@
 "use client";
 
 import { OrderEntryForm } from "@/components/OrderEntryForm";
+import { MidnightOrderSubmitter } from "@/components/MidnightOrderSubmitter";
 import { PairSnapshot, FlowSection } from "@/components/PairSnapshot";
 import { PageHead } from "@/components/atoms";
 import { useReadContracts } from "wagmi";
@@ -46,8 +47,11 @@ export default function PoolPage() {
         </>}
       />
 
-      <div className="grid-2 grid-2-trade" style={{ gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)", alignItems: "stretch" }}>
-        <OrderEntryForm />
+      <div className="grid-2 grid-2-trade" style={{ gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)", alignItems: "stretch", gap: "24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <MidnightOrderSubmitter />
+          <OrderEntryForm />
+        </div>
         <div className="col snapshot-col" style={{ gap: 20 }}>
           <PairSnapshot
             pairLabel={pairLabel}

@@ -234,7 +234,7 @@ function buildPlannedOrder(args: {
     limitPrice,
     expiryHours: args.profile.expiryHours,
     clientOrderId: `${args.runId}-p${args.pair.id}-l${args.level + 1}-${role}`,
-    agent: "obsidian-maker-bot",
+    agent: "umbra-maker-bot",
     sessionAccountCommitment: args.sessionAccountCommitment,
     pairLabel: pairLabel(args.pair),
     baseSymbol: cleanSymbol(args.pair.base.symbol),

@@ -164,7 +164,7 @@ export async function onBatchClosed(
             const inputOrders = res.inputOrders.map(serializeDecryptedOrder);
             const outputMatches = res.matches.map(serializeAuctionMatch);
             await writeAuditLog(auditCtx.bucket, auditKey, {
-              schema: "obsidian.match.proof-receipt.v2",
+              schema: "umbra.match.proof-receipt.v2",
               matchId: matchId.toString(),
               batchId: batchId.toString(),
               pairId: p.id,
@@ -177,13 +177,13 @@ export async function onBatchClosed(
               baseFilled: m.cashAmount.toString(),
               quoteFilled: m.assetAmount.toString(),
               privateInputRoot: digest({
-                schema: "obsidian.audit.private-input-root.v1",
+                schema: "umbra.audit.private-input-root.v1",
                 privateProofSalt,
                 inputOrders,
               }),
               privateInputCount: inputOrders.length,
               outputRoot: digest({
-                schema: "obsidian.audit.output-root.v1",
+                schema: "umbra.audit.output-root.v1",
                 privateProofSalt,
                 matches: outputMatches,
               }),

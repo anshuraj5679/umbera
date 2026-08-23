@@ -21,7 +21,7 @@ export type AuditMatchRow = {
 };
 
 export type AuditProofReceipt = {
-  schema: "obsidian.match.proof-receipt.v1" | "obsidian.match.proof-receipt.v2";
+  schema: "umbra.match.proof-receipt.v1" | "umbra.match.proof-receipt.v2" | "umbra.match.proof-receipt.v3";
   matchId: string;
   batchId: string;
   pairId: number;
@@ -57,7 +57,7 @@ export type AuditProofReceipt = {
 };
 
 export type BatchAuditProofReceipt = {
-  schema: "obsidian.batch.proof-receipt.v1";
+  schema: "umbra.batch.proof-receipt.v1";
   batchId: string;
   chainId: number | null;
   dexAddress: string | null;
@@ -130,7 +130,7 @@ export function buildBatchProofReceipt(input: {
   const allSalted = receipts.length > 0 && receipts.every((receipt) => receipt.commitments.salted);
 
   return {
-    schema: "obsidian.batch.proof-receipt.v1",
+    schema: "umbra.batch.proof-receipt.v1",
     batchId,
     chainId: input.chainId ?? receipts[0]?.chainId ?? null,
     dexAddress: input.dexAddress ?? receipts[0]?.dexAddress ?? null,
@@ -145,11 +145,11 @@ export function buildBatchProofReceipt(input: {
     failedAuditMatchIds,
     roots: {
       matchReceiptRoot: receipts.length > 0
-        ? digest({ schema: "obsidian.batch.match-receipt-root.v1", batchId, receipts })
+        ? digest({ schema: "umbra.batch.match-receipt-root.v1", batchId, receipts })
         : null,
       transcriptDigestRoot: receipts.length > 0
         ? digest({
-          schema: "obsidian.batch.transcript-digest-root.v1",
+          schema: "umbra.batch.transcript-digest-root.v1",
           batchId,
           transcriptDigests: receipts.map((receipt) => ({
             matchId: receipt.matchId,
@@ -160,7 +160,7 @@ export function buildBatchProofReceipt(input: {
         : null,
       privateInputRoot: receipts.length > 0 && receipts.every((receipt) => receipt.commitments.privateInputRoot)
         ? digest({
-          schema: "obsidian.batch.private-input-root.v1",
+          schema: "umbra.batch.private-input-root.v1",
           batchId,
           privateInputRoots: receipts.map((receipt) => ({
             matchId: receipt.matchId,
@@ -171,7 +171,7 @@ export function buildBatchProofReceipt(input: {
         : null,
       outputRoot: receipts.length > 0 && receipts.every((receipt) => receipt.commitments.outputRoot)
         ? digest({
-          schema: "obsidian.batch.output-root.v1",
+          schema: "umbra.batch.output-root.v1",
           batchId,
           outputRoots: receipts.map((receipt) => ({
             matchId: receipt.matchId,
@@ -400,8 +400,8 @@ function buildProofReceipt(input: {
   const commitments = proofCommitments(input.transcript, input.match);
   return {
     schema: transcriptSchema(input.transcript) === "receipt-v2"
-      ? "obsidian.match.proof-receipt.v2"
-      : "obsidian.match.proof-receipt.v1",
+      ? "umbra.match.proof-receipt.v2"
+      : "umbra.match.proof-receipt.v1",
     matchId: input.match.id.toString(),
     batchId: input.match.batchId.toString(),
     pairId: input.match.pairId,
@@ -448,7 +448,7 @@ function proofCommitments(transcript: Record<string, unknown>, match: AuditMatch
   const salted = isCommitmentSalt(privateProofSalt);
   const privateInputRoot = inputOrders && salted
     ? digest({
-      schema: "obsidian.audit.private-input-root.v1",
+      schema: "umbra.audit.private-input-root.v1",
       privateProofSalt,
       inputOrders,
     })
@@ -464,7 +464,7 @@ function proofCommitments(transcript: Record<string, unknown>, match: AuditMatch
   }];
   const outputRoot = salted
     ? digest({
-      schema: "obsidian.audit.output-root.v1",
+      schema: "umbra.audit.output-root.v1",
       privateProofSalt,
       matches: outputPayload,
     })
@@ -536,7 +536,7 @@ function normalizeHex(value: string | null | undefined) {
 
 function transcriptSchema(transcript: Record<string, unknown>): AuditVerificationResult["transcript"]["schema"] {
   const schema = stringField(transcript, "schema");
-  if (schema === "obsidian.match.proof-receipt.v2") return "receipt-v2";
+  if (schema === "umbra.match.proof-receipt.v3" || schema === "umbra.match.proof-receipt.v2") return "receipt-v2";
   if (schema === "match-v2-private-auction-inputs") return schema;
   if (stringField(transcript, "orderAId") && stringField(transcript, "orderBId")) return "match-v1";
   return "legacy-or-unknown";
