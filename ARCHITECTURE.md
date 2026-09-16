@@ -61,5 +61,3 @@ Settlement Engine
 
 ---
 
-## 3. Historical Note
-Original Fhenix CoFHE V1 specifications have been archived in [`docs/FHENIX-ARCHIVE.md`](docs/FHENIX-ARCHIVE.md).

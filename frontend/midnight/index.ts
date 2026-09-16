@@ -4,7 +4,7 @@
  * @module midnight
  */
 
-export { isLaceAvailable, connectLace, isLaceEnabled, disconnectLace, type MidnightWalletState } from "./wallet";
+export { isLaceAvailable, connectLace, isLaceEnabled, disconnectLace, signOrderWithLace, getActiveLaceApi, type MidnightWalletState } from "./wallet";
 export { getDefaultConfig, createMidnightProviders, type MidnightClientConfig } from "./client";
 export { OrderStatus, BatchStatus, createUmbraContract, type UmbraContract, type OrderCommitment, type Nullifier, type SettlementRoot } from "./contract";
 export { computeOrderCommitment, computeOrderNullifier, createPrivateOrder, generateSalt, PRIVACY_CLASSIFICATION, type PrivateOrderInput, type OrderPrivacyState } from "./privacy";

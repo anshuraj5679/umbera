@@ -84,27 +84,27 @@ function QueueBars({ count }: { count: number }) {
 export function FlowSection() {
   return (
     <section style={{ marginTop: 32 }}>
-      <Card title="Flow" subtitle="What happens when you submit" meta="CoFHE · SEALED">
+      <Card title="Flow" subtitle="What happens when you submit" meta="MIDNIGHT ZK · COMPACT">
         <div className="flow-grid">
           <div className="flow-step">
             <span>01</span>
-            <b>Encrypt</b>
-            <p>Order fields sealed locally via CoFHE; only handles leave your wallet.</p>
+            <b>Private Commitment</b>
+            <p>Order parameters remain in client memory; a 32-byte cryptographic ZK commitment is formed.</p>
           </div>
           <div className="flow-step">
             <span>02</span>
-            <b>Queue</b>
-            <p>Submission joins current batch; identity & intent remain hidden.</p>
+            <b>Lace Authorization</b>
+            <p>Lace Wallet pops up to approve the commitment and allocate tDUST network gas fees.</p>
           </div>
           <div className="flow-step">
             <span>03</span>
-            <b>Match</b>
-            <p>At window close, the matcher runs a sealed clearing auction.</p>
+            <b>Batch Queue</b>
+            <p>Commitment is registered on the Midnight Compact smart contract on Preview testnet.</p>
           </div>
           <div className="flow-step">
             <span>04</span>
-            <b>Settle</b>
-            <p>Net deltas settle on-chain; remainders are claimable.</p>
+            <b>ZK Match & Settle</b>
+            <p>Uniform clearing price is executed via Compact ZK circuits with mathematical audit receipts.</p>
           </div>
         </div>
       </Card>

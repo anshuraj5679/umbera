@@ -6,21 +6,23 @@
  * @module midnight/contract
  */
 
-export enum OrderStatus {
-  ACTIVE = "ACTIVE",
-  BATCHED = "BATCHED",
-  MATCHED = "MATCHED",
-  SETTLED = "SETTLED",
-  CANCELLED = "CANCELLED",
-  EXPIRED = "EXPIRED",
-}
+export const OrderStatus = {
+  ACTIVE: "ACTIVE",
+  BATCHED: "BATCHED",
+  MATCHED: "MATCHED",
+  SETTLED: "SETTLED",
+  CANCELLED: "CANCELLED",
+  EXPIRED: "EXPIRED",
+} as const;
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
-export enum BatchStatus {
-  OPEN = "OPEN",
-  CLOSED = "CLOSED",
-  MATCHED = "MATCHED",
-  SETTLED = "SETTLED",
-}
+export const BatchStatus = {
+  OPEN: "OPEN",
+  CLOSED: "CLOSED",
+  MATCHED: "MATCHED",
+  SETTLED: "SETTLED",
+} as const;
+export type BatchStatus = (typeof BatchStatus)[keyof typeof BatchStatus];
 
 export type OrderCommitment = string;
 export type Nullifier = string;
@@ -33,6 +35,7 @@ export interface UmbraContract {
   publishMatchResult(batchId: bigint, settlementRoot: SettlementRoot, matchedCommitments: OrderCommitment[]): Promise<string>;
   settleBatch(batchId: bigint): Promise<string>;
   getOrderStatus(commitment: OrderCommitment): Promise<OrderStatus>;
+  verifyOrderStatus(commitment: OrderCommitment): Promise<OrderStatus>;
   isNullifierSpent(nullifier: Nullifier): Promise<boolean>;
   getCurrentBatchId(): Promise<bigint>;
   getBatchStatus(batchId: bigint): Promise<BatchStatus>;
@@ -85,6 +88,10 @@ export async function createUmbraContract(contractAddress: string, providers: an
     },
 
     async getOrderStatus(commitment: OrderCommitment): Promise<OrderStatus> {
+      return localCommitments.get(commitment) ?? OrderStatus.ACTIVE;
+    },
+
+    async verifyOrderStatus(commitment: OrderCommitment): Promise<OrderStatus> {
       return localCommitments.get(commitment) ?? OrderStatus.ACTIVE;
     },
 

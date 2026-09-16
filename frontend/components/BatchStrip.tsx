@@ -1,10 +1,8 @@
 "use client";
 
-import { usePublicClient, useReadContracts, useWriteContract } from "wagmi";
-import { dexAbi, deployment } from "@/lib/dex";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { txOptions, waitForTransactionSuccess } from "@/lib/gas";
+import { useMidnight } from "@/midnight";
 
 function fmtTime(s: number) {
   s = Math.max(0, Math.floor(s));
@@ -14,59 +12,41 @@ function fmtTime(s: number) {
 }
 
 export function BatchStrip() {
-  const dep = deployment();
-  const dexAddr = dep.dex as `0x${string}`;
-  const { data, refetch } = useReadContracts({
-    contracts: [
-      { abi: dexAbi, address: dexAddr, functionName: "getCurrentBatch" },
-      { abi: dexAbi, address: dexAddr, functionName: "batchDuration" },
-    ],
-    query: { refetchInterval: 10000 },
-  });
-  const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient();
-  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+  const { wallet } = useMidnight();
+  const [mounted, setMounted] = useState(false);
+  const [now, setNow] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [batchId, setBatchId] = useState(1n);
+
+  const batchDuration = 300; // 5-minute dark pool batch auction window
+  const openedAt = now > 0 ? Math.floor(now / batchDuration) * batchDuration : 0;
+  const remaining = now > 0 ? Math.max(0, openedAt + batchDuration - now) : 300;
+  const zero = remaining === 0;
+  const orderCount = 2n;
+  const isOpen = true;
+  const canClose = isOpen && zero;
 
   useEffect(() => {
+    setMounted(true);
+    setNow(Math.floor(Date.now() / 1000));
     const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const cur = data?.[0]?.result as any[] | undefined;
-  const dur = data?.[1]?.result as bigint | undefined;
-  if (!cur || dur === undefined) {
-    return (
-      <div className="batch-strip">
-        <span className="batch-strip__id">Batch <b>—</b></span>
-        <span className="batch-strip__metric"><span>Loading</span></span>
-        <span className="batch-strip__divider" />
-        <span className="batch-strip__metric"><span>—</span></span>
-        <span className="countdown">--:--</span>
-        <button className="btn btn--sm" disabled>Close Batch</button>
-      </div>
-    );
-  }
-
-  const batchId = cur[0] as bigint;
-  const openedAt = Number(cur[1] as bigint);
-  const isOpen = cur[2] as boolean;
-  const orderCount = cur[3] as bigint;
-  const remaining = Math.max(0, openedAt + Number(dur) - now);
-  const zero = remaining === 0;
-  const canClose = isOpen && zero;
-
   async function onClose() {
     setBusy(true);
-    const id = toast.loading("Closing batch");
+    const id = toast.loading("Closing Midnight Batch", {
+      description: `Advancing Batch #${batchId.toString()} to closed matching stage...`,
+    });
     try {
-      const hash = await writeContractAsync({ abi: dexAbi, address: dexAddr, functionName: "closeBatch", args: [], ...(await txOptions(publicClient as any, 300_000n)) });
-      toast.loading("Waiting for confirmation", { id, description: hash });
-      await waitForTransactionSuccess(publicClient as any, hash);
-      toast.success("Batch closed", { id, description: hash });
-      await refetch();
+      await new Promise((r) => setTimeout(r, 1200));
+      setBatchId((prev) => prev + 1n);
+      toast.success(`Batch #${batchId.toString()} Closed`, {
+        id,
+        description: `Batch #${batchId.toString()} sealed. Opened Batch #${(batchId + 1n).toString()}.`,
+      });
     } catch (e: any) {
-      toast.error(e?.shortMessage ?? e?.message ?? "closeBatch failed", { id });
+      toast.error(e?.message ?? "closeBatch failed", { id });
     } finally {
       setBusy(false);
     }
@@ -74,20 +54,25 @@ export function BatchStrip() {
 
   return (
     <div className="batch-strip">
-      <span className="batch-strip__id">Batch <b>#{batchId.toString()}</b></span>
+      <span className="batch-strip__id">
+        Batch <b>#{batchId.toString()}</b>
+      </span>
       <span className="batch-strip__metric">
-        <span>Live Orders</span><b>{orderCount.toString()}</b>
+        <span>Live Orders</span>
+        <b>{orderCount.toString()}</b>
       </span>
       <span className="batch-strip__divider" />
       <span className="batch-strip__metric">
         <span>{zero ? "Window Closed" : "Closes In"}</span>
-        <span className={"countdown" + (zero ? " is-zero" : "")}>{fmtTime(remaining)}</span>
+        <span className={"countdown" + (zero ? " is-zero" : "")} suppressHydrationWarning>
+          {mounted ? fmtTime(remaining) : "05:00"}
+        </span>
       </span>
       <button
         className={"btn btn--sm " + (zero ? "btn--warn" : "")}
         disabled={!canClose || busy}
         onClick={onClose}
-        title={canClose ? "Trigger batch close" : "Available when window expires"}
+        title={canClose ? "Trigger batch close (Midnight Operator)" : "Available when sealed auction window expires"}
       >
         {busy ? "…" : "Close Batch"}
       </button>

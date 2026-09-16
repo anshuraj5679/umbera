@@ -42,4 +42,11 @@ shared/abi/*.json
 shared/auction/*.js
 shared/addresses/index.js
 
+# Private state stores & build caches
+*-private-store/
+*.tsbuildinfo
+*.hex
+*.bin
+tree_updates*.json
+
 .vercel

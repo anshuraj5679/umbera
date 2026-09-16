@@ -14,7 +14,7 @@
 #    - Use a named volume to cache parameters across restarts
 #
 #  IMPORTANT: The proof server image tag MUST match the Midnight ledger
-#  version used by Preprod. Check the support matrix at:
+#  version used by Preview. Check the support matrix at:
 #  https://docs.midnight.network/
 # ============================================================================
 

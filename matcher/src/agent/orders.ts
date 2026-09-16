@@ -51,7 +51,7 @@ export function createAgentOrderService({ cfg, deployment }: AgentOrderServiceOp
     capabilities() {
       return {
         ok: true,
-        network: "midnight-preprod",
+        network: "midnight-preview",
         x402: {
           enabled: cfg.X402_AGENT_ENABLED,
           facilitatorUrl: cfg.X402_AGENT_FACILITATOR_URL,

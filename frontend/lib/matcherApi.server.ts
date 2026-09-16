@@ -121,7 +121,7 @@ function matcherApiUrl(path: string) {
 
   const base = raw.replace(/\/+$/, "");
   const url = new URL(path, `${base}/`);
-  if (isProductionRuntime() && url.protocol !== "https:") {
+  if (isProductionRuntime() && url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
     throw new Error("MATCHER_API_URL must use https:// in deployed environments");
   }
   return url;

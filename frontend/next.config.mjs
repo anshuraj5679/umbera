@@ -1,9 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [
+      { source: "/", destination: "/pool", permanent: false },
+    ];
+  },
   async rewrites() {
     return [
-      { source: "/", destination: "/landing.html" },
       // Proxy Fhenix CoFHE testnet endpoints so they're served same-origin
       // (sidesteps CORS + COEP CORP requirements that block browser POSTs).
       { source: "/cofhe-proxy/main/:path*", destination: "https://testnet-cofhe.fhenix.zone/:path*" },
@@ -32,7 +36,7 @@ const nextConfig = {
     ];
   },
   webpack: (config) => {
-    config.externals.push("pino-pretty", "lokijs", "encoding", "@coinbase/cdp-sdk", "@x402/evm", "@react-native-async-storage/async-storage");
+    config.externals.push("pino-pretty", "lokijs", "encoding");
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "@x402/evm/upto/client": false,

@@ -102,7 +102,7 @@ Arbitrum Sepolia
 ## Repository Map
 
 ```text
-contracts/  DarkPoolDEX.sol smart contracts, FHERC20 operator flow, settlement tests
+contracts/  DarkPoolDEX.sol smart contracts,settlement tests
 frontend/   Next.js app, wallet flow, order entry, markets, batches, health
 matcher/    Confirmed indexer, batch matcher, settlement workers, audit verifier
 shared/     Auction logic, pricing, commitment helpers, deployed addresses

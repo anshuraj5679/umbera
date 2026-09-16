@@ -1037,7 +1037,7 @@
         without revealing price, quantity, or intent. Privacy by cryptography, not custody.
       </p>
       <div class="hero__actions">
-        <a class="btn btn--primary" href="/pool">Enter the Pool</a>
+        <a class="btn btn--primary" href="/pool" onclick="window.location.href='/pool'; return false;">Enter the Pool</a>
         <button class="btn">Read Whitepaper</button>
       </div>
     </div>
@@ -1081,15 +1081,15 @@
   <section class="section story snap" id="story-01" data-screen-label="03 Encrypted Order Flow">
     <div class="story__inner">
       <div class="story__num reveal">01</div>
-      <div class="story__index reveal" data-d="1">— ENCRYPTED ORDER FLOW</div>
+      <div class="story__index reveal" data-d="1">— SHIELDED ORDER FLOW</div>
       <h3 class="story__title reveal" data-d="2">
         Submit, match and settle without revealing <em>price</em>, <em>quantity</em>, or <em>intent</em>.
       </h3>
       <p class="story__body reveal" data-d="3">
-        Every order is encrypted client-side with CoFHE before it touches the chain.
-        Validators, searchers, and counterparties see nothing but ciphertext until the auction clears.
+        Every order is shielded client-side with Midnight ZK proofs before touching the ledger.
+        Validators, searchers, and counterparties see only 32-byte Poseidon commitments until the auction settles.
       </p>
-      <div class="story__meta reveal" data-d="4">euint128 · client-side seal · onchain ciphertext</div>
+      <div class="story__meta reveal" data-d="4">Compact v0.22.0 · ZK-SNARK Prover · Public Ledger Commitments</div>
     </div>
   </section>
 
@@ -1102,7 +1102,7 @@
         No front-running. No sandwiching. <em>No leaks.</em>
       </h3>
       <p class="story__body reveal" data-d="3">
-        Encrypted mempools strip economic incentive from reordering. Time-priority is enforced
+        Shielded order commitments strip economic incentive from reordering. Time-priority is enforced
         by the protocol — not by who pays the searcher.
       </p>
       <div class="story__meta reveal" data-d="4">protocol-enforced · time-priority · invariant</div>
@@ -1118,10 +1118,10 @@
         <em>Five-minute</em> sealed windows.
       </h3>
       <p class="story__body reveal" data-d="3">
-        Orders accumulate, then clear at a uniform encrypted price.
+        Orders accumulate, then clear at a uniform clearing price.
         No latency arms race, no privileged frontrunners.
       </p>
-      <div class="story__meta reveal" data-d="4">5m batch · uniform clearing · sealed-bid</div>
+      <div class="story__meta reveal" data-d="4">5m batch · uniform clearing · ZK commitment</div>
     </div>
   </section>
 
@@ -1129,15 +1129,15 @@
   <section class="section story snap" id="story-04" data-screen-label="06 Polar Matching">
     <div class="story__inner">
       <div class="story__num reveal">04</div>
-      <div class="story__index reveal" data-d="1">— POLAR MATCHING</div>
+      <div class="story__index reveal" data-d="1">— ZERO-KNOWLEDGE MATCHING</div>
       <h3 class="story__title reveal" data-d="2">
-        <em>O(n)</em> FHE comparisons.
+        <em>O(n)</em> ZK Verifications.
       </h3>
       <p class="story__body reveal" data-d="3">
-        Optimal-extreme matching reduces encrypted comparisons by two orders of magnitude
-        versus naive engines.
+        Uniform batch matching verifies execution bounds on-chain using Midnight Compact circuits
+        in constant-time proof verifications.
       </p>
-      <div class="story__meta reveal" data-d="4">100× fewer ops · deterministic · fair</div>
+      <div class="story__meta reveal" data-d="4">100× faster verifications · Zero-Knowledge SNARKs · Compact Engine</div>
     </div>
   </section>
 
@@ -1145,15 +1145,15 @@
   <section class="section story snap" id="story-05" data-screen-label="07 Threshold Settlement">
     <div class="story__inner">
       <div class="story__num reveal">05</div>
-      <div class="story__index reveal" data-d="1">— THRESHOLD SETTLEMENT</div>
+      <div class="story__index reveal" data-d="1">— SHIELDED NULLIFIERS</div>
       <h3 class="story__title reveal" data-d="2">
-        <em>t-of-n</em> decryption.
+        <em>Spent nullifier</em> settlement.
       </h3>
       <p class="story__body reveal" data-d="3">
-        Selective threshold decryption reveals only matched trades.
-        Unfilled orders remain private — forever.
+        On-chain nullifiers prevent double-spending without revealing trader identity.
+        Unfilled commitments remain shielded — forever.
       </p>
-      <div class="story__meta reveal" data-d="4">threshold network · selective reveal · unmatched stays private</div>
+      <div class="story__meta reveal" data-d="4">Midnight Ledger · Shielded State · Unmatched Stays Private</div>
     </div>
   </section>
 
@@ -1164,7 +1164,7 @@
       <h2 class="section__title reveal" data-d="1">Block-size liquidity.<br/><em>Without the leak.</em></h2>
       <div class="section__meta reveal" data-d="2">
         Min order · $10,000<br/>
-        Settlement · L2 finality<br/>
+        Settlement · Midnight Preview<br/>
         Fees · 0.20% all-in
       </div>
     </div>
@@ -1181,26 +1181,26 @@
           <div class="inst__point reveal" data-d="2">
             <div class="inst__point-num">01</div>
             <div class="inst__point-title">Sized for size — $10K floor, no ceiling</div>
-            <div class="inst__point-meta">euint128 amounts</div>
+            <div class="inst__point-meta">32-byte ZK commitments</div>
           </div>
           <div class="inst__point reveal" data-d="3">
             <div class="inst__point-num">02</div>
             <div class="inst__point-title">Information leakage — verifiably zero</div>
-            <div class="inst__point-meta">CoFHE · sealed-bid</div>
+            <div class="inst__point-meta">Midnight ZK · Compact v0.22.0</div>
           </div>
           <div class="inst__point reveal" data-d="4">
             <div class="inst__point-num">03</div>
             <div class="inst__point-title">Self-custody throughout the lifecycle</div>
-            <div class="inst__point-meta">No bridges · no escrows</div>
+            <div class="inst__point-meta">Shielded ledger · ZK Circuits</div>
           </div>
           <div class="inst__point reveal" data-d="5">
             <div class="inst__point-num">04</div>
-            <div class="inst__point-title">Settlement on Arbitrum L2</div>
-            <div class="inst__point-meta">~$0.10 / trade</div>
+            <div class="inst__point-title">Settlement on Midnight Preview</div>
+            <div class="inst__point-meta">tDUST native</div>
           </div>
           <div class="inst__point reveal" data-d="6">
             <div class="inst__point-num">05</div>
-            <div class="inst__point-title">Permit-based reporting for compliance</div>
+            <div class="inst__point-title">Nullifier-based double-spend prevention</div>
             <div class="inst__point-meta">Selective disclosure</div>
           </div>
         </div>

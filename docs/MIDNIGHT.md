@@ -5,8 +5,9 @@
 UMBRA is migrating its privacy and settlement layer from **Fhenix CoFHE** (Fully Homomorphic Encryption over EVM) to **Midnight Network** (Zero-Knowledge Native Compact Smart Contracts).
 
 - **Positioning**: *"Private Intent. Verifiable Execution."*
-- **Target Network**: Midnight Preprod Testnet
+- **Target Network**: Midnight Preview Testnet
 - **Compact Contract**: [`contracts/midnight/src/umbra.compact`](file:///d:/midnight/contracts/midnight/src/umbra.compact)
+- **Deployed Contract Address**: `3813ef0145c64237d34584141af8e11b4f4b3a8b29e4ab864fec4aed31880934`
 - **Proof Receipt Schema**: `umbra.match.proof-receipt.v3`
 
 ---

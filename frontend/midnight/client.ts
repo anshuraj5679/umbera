@@ -20,10 +20,10 @@ export type MidnightClientConfig = {
 
 export function getDefaultConfig(): MidnightClientConfig {
   return {
-    networkId: process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK_ID ?? "preprod",
-    indexerUrl: process.env.MIDNIGHT_INDEXER_URL ?? "https://midnight-preprod.blockfrost.io/api/v0",
-    indexerWsUrl: process.env.MIDNIGHT_INDEXER_WS_URL ?? "wss://midnight-preprod.blockfrost.io/api/v0/ws",
-    nodeUrl: process.env.MIDNIGHT_NODE_URL ?? "https://rpc.midnight-preprod.blockfrost.io",
+    networkId: process.env.NEXT_PUBLIC_MIDNIGHT_NETWORK_ID ?? "preview",
+    indexerUrl: process.env.MIDNIGHT_INDEXER_URL ?? "https://midnight-preview.blockfrost.io/api/v0",
+    indexerWsUrl: process.env.MIDNIGHT_INDEXER_WS_URL ?? "wss://midnight-preview.blockfrost.io/api/v0/ws",
+    nodeUrl: process.env.MIDNIGHT_NODE_URL ?? "https://rpc.midnight-preview.blockfrost.io",
     proofServerUrl: process.env.PROOF_SERVER_URL ?? "http://localhost:6300",
     blockfrostProjectId: process.env.BLOCKFROST_PROJECT_ID ?? undefined,
   };
@@ -49,13 +49,32 @@ export async function createMidnightProviders(config?: MidnightClientConfig) {
       ]);
 
       if (indexerPkg.status === "fulfilled") {
-        publicDataProvider = new (indexerPkg.value as any).IndexerPublicDataProvider(cfg.indexerUrl, cfg.indexerWsUrl);
+        const mod = indexerPkg.value as any;
+        publicDataProvider = typeof mod.indexerPublicDataProvider === "function"
+          ? mod.indexerPublicDataProvider(cfg.indexerUrl, cfg.indexerWsUrl)
+          : typeof mod.IndexerPublicDataProvider === "function"
+          ? new mod.IndexerPublicDataProvider(cfg.indexerUrl, cfg.indexerWsUrl)
+          : null;
       }
       if (proofPkg.status === "fulfilled") {
-        proofProvider = new (proofPkg.value as any).HttpClientProofProvider(cfg.proofServerUrl);
+        const mod = proofPkg.value as any;
+        proofProvider = typeof mod.httpClientProofProvider === "function"
+          ? mod.httpClientProofProvider(cfg.proofServerUrl)
+          : typeof mod.HttpClientProofProvider === "function"
+          ? new mod.HttpClientProofProvider(cfg.proofServerUrl)
+          : null;
       }
       if (levelPkg.status === "fulfilled") {
-        privateStateProvider = new (levelPkg.value as any).LevelPrivateStateProvider({ dbName: "umbra-private-state" });
+        const mod = levelPkg.value as any;
+        privateStateProvider = typeof mod.levelPrivateStateProvider === "function"
+          ? mod.levelPrivateStateProvider({
+              midnightDbName: "umbra-private-state",
+              accountId: "umbra-account",
+              privateStoragePasswordProvider: () => "umbra-secure-password-16char",
+            })
+          : typeof mod.LevelPrivateStateProvider === "function"
+          ? new mod.LevelPrivateStateProvider({ dbName: "umbra-private-state" })
+          : null;
       }
       isFullyConnected = !!(publicDataProvider && proofProvider && privateStateProvider);
     }

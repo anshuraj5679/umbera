@@ -165,7 +165,7 @@ export function OrderEntryForm() {
 
         <div className="row" style={{ justifyContent: "space-between", paddingTop: 6 }}>
           <div className="row" style={{ gap: 10 }}>
-            <Pill kind="ok">FHE Sealed</Pill>
+            <Pill kind="ok">Midnight ZK Sealed</Pill>
             <Pill kind={baseOperatorActive && quoteOperatorActive ? "ok" : "warn"}>Pair Operators</Pill>
             <Pill kind="muted">No-Front-Run</Pill>
           </div>

@@ -28,42 +28,42 @@ export interface DeploymentConfig {
 }
 
 export const DEFAULT_DEPLOYMENT: DeploymentConfig = {
-  chainId: parseInt(process.env.NEXT_PUBLIC_CHAIN_ID ?? "421614", 10),
-  dex: process.env.NEXT_PUBLIC_MIDNIGHT_CONTRACT_ADDRESS ?? "0x0000000000000000000000000000000000000000",
+  chainId: 0, // Midnight Network
+  dex: process.env.NEXT_PUBLIC_MIDNIGHT_CONTRACT_ADDRESS ?? "3813ef0145c64237d34584141af8e11b4f4b3a8b29e4ab864fec4aed31880934",
   underlying: {
-    mUSDC: "0x0000000000000000000000000000000000000010",
-    mWETH: "0x0000000000000000000000000000000000000011",
-    mWBTC: "0x0000000000000000000000000000000000000012",
+    mtDUST: "midnight:asset:tDUST",
+    mTKA: "midnight:asset:TKA",
+    mTKB: "midnight:asset:TKB",
   },
   pairs: [
     {
       id: 0,
       base: {
-        symbol: "USDC",
-        name: "USD Coin",
+        symbol: "tDUST",
+        name: "Test DUST",
         decimals: 6,
-        address: "0x0000000000000000000000000000000000000001",
+        address: "midnight:asset:tDUST",
       },
       quote: {
-        symbol: "WETH",
-        name: "Wrapped Ether",
-        decimals: 18,
-        address: "0x0000000000000000000000000000000000000002",
+        symbol: "TKA",
+        name: "Token A (Private)",
+        decimals: 6,
+        address: "midnight:asset:TKA",
       },
     },
     {
       id: 1,
       base: {
-        symbol: "USDC",
-        name: "USD Coin",
+        symbol: "TKA",
+        name: "Token A (Private)",
         decimals: 6,
-        address: "0x0000000000000000000000000000000000000001",
+        address: "midnight:asset:TKA",
       },
       quote: {
-        symbol: "WBTC",
-        name: "Wrapped Bitcoin",
-        decimals: 8,
-        address: "0x0000000000000000000000000000000000000003",
+        symbol: "TKB",
+        name: "Token B (Private)",
+        decimals: 18,
+        address: "midnight:asset:TKB",
       },
     },
   ],

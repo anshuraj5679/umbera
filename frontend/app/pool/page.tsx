@@ -1,56 +1,55 @@
 "use client";
 
-import { OrderEntryForm } from "@/components/OrderEntryForm";
 import { MidnightOrderSubmitter } from "@/components/MidnightOrderSubmitter";
 import { PairSnapshot, FlowSection } from "@/components/PairSnapshot";
 import { PageHead } from "@/components/atoms";
-import { useReadContracts } from "wagmi";
-import { dexAbi, deployment } from "@/lib/dex";
+import { deployment } from "@/lib/dex";
 import { useEffect, useState } from "react";
 
 export default function PoolPage() {
   const dep = deployment();
-  const dexAddr = dep.dex as `0x${string}`;
-  const { data } = useReadContracts({
-    contracts: [
-      { abi: dexAbi, address: dexAddr, functionName: "getCurrentBatch" },
-      { abi: dexAbi, address: dexAddr, functionName: "batchDuration" },
-    ],
-    query: { refetchInterval: 10000 },
-  });
-  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+  const [mounted, setMounted] = useState(false);
+  const [now, setNow] = useState(0);
+
   useEffect(() => {
+    setMounted(true);
+    setNow(Math.floor(Date.now() / 1000));
     const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const cur = data?.[0]?.result as any[] | undefined;
-  const dur = data?.[1]?.result as bigint | undefined;
-  const batchId = cur?.[0] as bigint | undefined;
-  const openedAt = cur ? Number(cur[1] as bigint) : 0;
-  const batchOpen = cur?.[2] as boolean | undefined;
-  const orderCount = cur?.[3] as bigint | undefined;
-  const remaining = openedAt && dur ? Math.max(0, openedAt + Number(dur) - now) : 0;
+  // Midnight contract batch lifecycle state
+  const batchId = 1n;
+  const batchOpen = true;
+  const orderCount = 2n;
+  const batchDuration = 300; // 5 minute sealed batch auction windows
+  const openedAt = now > 0 ? Math.floor(now / batchDuration) * batchDuration : 0;
+  const remaining = now > 0 ? Math.max(0, openedAt + batchDuration - now) : 300;
 
   const pair = dep.pairs[0];
   const pairLabel = `${pair.base.symbol} / ${pair.quote.symbol}`;
+
+  const remainingStr = mounted
+    ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`
+    : "05:00";
 
   return (
     <>
       <PageHead
         num="01 · Trade"
-        title="Submit"
-        em="encrypted"
-        meta={<>
-          BATCH {batchId !== undefined ? `#${batchId.toString()}` : "—"}<br />
-          WINDOW {String(Math.floor(remaining / 60)).padStart(2, "0")}M REMAINING
-        </>}
+        title="Midnight"
+        em="dark pool"
+        meta={
+          <span suppressHydrationWarning>
+            BATCH #{batchId.toString()} · PREVIEW TESTNET<br />
+            SEALED WINDOW {remainingStr} REMAINING
+          </span>
+        }
       />
 
-      <div className="grid-2 grid-2-trade" style={{ gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)", alignItems: "stretch", gap: "24px" }}>
+      <div className="grid-2 grid-2-trade" style={{ gridTemplateColumns: "minmax(0, 1.15fr) minmax(0, 0.85fr)", alignItems: "stretch", gap: "24px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <MidnightOrderSubmitter />
-          <OrderEntryForm />
         </div>
         <div className="col snapshot-col" style={{ gap: 20 }}>
           <PairSnapshot

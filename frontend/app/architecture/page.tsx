@@ -39,7 +39,7 @@ const COMPONENTS: ArchComponent[] = [
   {
     id: "compact",
     name: "Compact Contract",
-    sub: "obsidian.compact Circuits",
+    sub: "umbra.compact Circuits",
     desc: "Smart contract compiled to ZK circuits. Manages order commitments, nullifiers, and batch lifecycle without reading private order data.",
     tech: "Compact DSL (Minokawa)",
     privacyRole: "On-Chain Zero-Knowledge Verification",
@@ -53,11 +53,11 @@ const COMPONENTS: ArchComponent[] = [
     privacyRole: "Client-Side ZK Proving",
   },
   {
-    id: "preprod",
-    name: "Midnight Preprod",
+    id: "preview",
+    name: "Midnight Preview",
     sub: "Testnet Ledger & Indexer",
     desc: "Shielded ledger recording commitments, batch statuses, and settlement receipts.",
-    tech: "Midnight Preprod / Blockfrost API",
+    tech: "Midnight Preview / Blockfrost API",
     privacyRole: "Public Verifiable Ledger",
   },
   {
@@ -72,7 +72,7 @@ const COMPONENTS: ArchComponent[] = [
     id: "audit",
     name: "Public Audit System",
     sub: "Receipt Verification",
-    desc: "Cryptographic proof receipts (obsidian.match.proof-receipt.v3) verifying fair match execution.",
+    desc: "Cryptographic proof receipts (umbra.match.proof-receipt.v3) verifying fair match execution.",
     tech: "Digest Receipts & Verification API",
     privacyRole: "Receipt-Only Verification",
   },
