@@ -1,6 +1,0 @@
-packages:
-  - 'contracts'
-  - 'contracts/midnight'
-  - 'frontend'
-  - 'matcher'
-  - 'shared'
