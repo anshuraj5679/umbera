@@ -763,6 +763,10 @@
     cursor: pointer;
     transition: all 0.3s ease;
     backdrop-filter: blur(8px);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .btn:hover {
     background: rgba(255,255,255,0.08);
@@ -1023,22 +1027,41 @@
   </div>
 
   <section class="hero snap" id="hero">
+    <header class="nav">
+      <ul class="nav__links nav__links--left">
+        <li><a href="/pool">Trade</a></li>
+        <li><a href="/markets">Markets</a></li>
+        <li><a href="/batches">Batches</a></li>
+        <li><a href="/architecture">Architecture</a></li>
+      </ul>
+
+      <a href="/" class="nav__brand" style="text-decoration: none;">
+        <div class="nav__brand-mark"></div>
+        <div class="nav__wordmark">UMBRA</div>
+      </a>
+
+      <div class="nav__cta">
+        <div class="nav__network">Midnight Testnet-02</div>
+        <a href="/pool" class="btn btn--primary">Launch App</a>
+      </div>
+    </header>
+
     <div class="hero__three" id="threeMount"></div>
 
     <!-- Side runners -->
-    <div class="hero__side hero__side--l">FHENIX · COFHE · ENCRYPTED</div>
-    <div class="hero__side hero__side--r">EST · 2026 / V0.1.3</div>
+    <div class="hero__side hero__side--l">MIDNIGHT · ZERO-KNOWLEDGE · SEALED</div>
+    <div class="hero__side hero__side--r">COMPACT V0.22.0 / TESTNET-02</div>
 
     <!-- Centered content -->
     <div class="hero__content">
-      <div class="hero__eyebrow">On-Chain Dark Pool · Powered by Fhenix CoFHE</div>
+      <div class="hero__eyebrow">Confidential Dark Pool · Powered by Midnight Network</div>
       <p class="hero__sub">
         An <em>encrypted</em> order book for institutional size. Submit, match, and settle —
         without revealing price, quantity, or intent. Privacy by cryptography, not custody.
       </p>
       <div class="hero__actions">
-        <a class="btn btn--primary" href="/pool" onclick="window.location.href='/pool'; return false;">Enter the Pool</a>
-        <button class="btn">Read Whitepaper</button>
+        <a class="btn btn--primary" href="/pool">Enter Dark Pool →</a>
+        <a class="btn" href="/architecture">View Architecture</a>
       </div>
     </div>
 
@@ -1250,39 +1273,38 @@
     <div class="footer__top">
       <div>
         <div class="footer__brand">Umbra.</div>
-        <p class="footer__brand-sub">An encrypted on-chain dark pool for institutional size. Powered by Fhenix CoFHE on Arbitrum.</p>
+        <p class="footer__brand-sub">An encrypted on-chain dark pool for institutional size. Powered by Midnight Network with Zero-Knowledge proofs and Compact smart contracts.</p>
       </div>
       <div class="footer__col">
         <h4>Protocol</h4>
         <ul>
-          <li><a href="#">Architecture</a></li>
-          <li><a href="#">Whitepaper</a></li>
-          <li><a href="#">Audits</a></li>
-          <li><a href="#">Github</a></li>
+          <li><a href="/architecture">Architecture</a></li>
+          <li><a href="/markets">Markets</a></li>
+          <li><a href="/batches">Batches</a></li>
+          <li><a href="https://github.com/anshuraj5679/umbera" target="_blank" rel="noopener">Github</a></li>
         </ul>
       </div>
       <div class="footer__col">
         <h4>Trade</h4>
         <ul>
           <li><a href="/pool">Launch App</a></li>
-          <li><a href="#">API Reference</a></li>
-          <li><a href="#">Status</a></li>
-          <li><a href="/setup">Faucet</a></li>
+          <li><a href="/markets">Order Book</a></li>
+          <li><a href="/batches">Settlement Batches</a></li>
+          <li><a href="/setup">Faucet & Setup</a></li>
         </ul>
       </div>
       <div class="footer__col">
-        <h4>Company</h4>
+        <h4>Network</h4>
         <ul>
-          <li><a href="#">About</a></li>
-          <li><a href="#">Careers</a></li>
-          <li><a href="#">Press</a></li>
-          <li><a href="#">Contact</a></li>
+          <li><a href="https://docs.midnight.network" target="_blank" rel="noopener">Midnight Docs</a></li>
+          <li><a href="https://telemetry.midnight.network" target="_blank" rel="noopener">Testnet Telemetry</a></li>
+          <li><a href="https://midnight.network" target="_blank" rel="noopener">Midnight Website</a></li>
         </ul>
       </div>
     </div>
     <div class="footer__bottom">
-      <span>© 2026 Umbra Labs · Encrypted by design</span>
-      <span>v0.1.3 · Arbitrum Sepolia</span>
+      <span>© 2026 Umbra Labs · Shielded Zero-Knowledge Architecture</span>
+      <span>v0.22.0 · Midnight Testnet-02</span>
     </div>
   </footer>
 

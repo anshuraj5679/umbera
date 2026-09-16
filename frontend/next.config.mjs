@@ -1,18 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  async redirects() {
-    return [
-      { source: "/", destination: "/pool", permanent: false },
-    ];
-  },
   async rewrites() {
     return [
-      // Proxy Fhenix CoFHE testnet endpoints so they're served same-origin
-      // (sidesteps CORS + COEP CORP requirements that block browser POSTs).
-      { source: "/cofhe-proxy/main/:path*", destination: "https://testnet-cofhe.fhenix.zone/:path*" },
-      { source: "/cofhe-proxy/vrf/:path*", destination: "https://testnet-cofhe-vrf.fhenix.zone/:path*" },
-      { source: "/cofhe-proxy/tn/:path*", destination: "https://testnet-cofhe-tn.fhenix.zone/:path*" },
+      { source: "/", destination: "/landing.html" },
+      { source: "/landing", destination: "/landing.html" },
     ];
   },
   async headers() {
