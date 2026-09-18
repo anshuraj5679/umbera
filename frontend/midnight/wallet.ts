@@ -17,31 +17,46 @@ export type MidnightWalletState = {
   unshieldedAddress?: string | null;
   hasDust?: boolean;
   dustBalance?: number;
+  isRealWallet?: boolean;
   api?: any;
 };
 
 let activeLaceApi: any = null;
 
 const STORAGE_KEY_DUST_BALANCE = "umbra_lace_tdust_balance";
+const STORAGE_KEY_IS_REAL = "umbra_is_real_lace_connected";
 const DEFAULT_FAUCET_DUST = 25000.0;
 
 export function getStoredDustBalance(): number {
   if (typeof window === "undefined") return DEFAULT_FAUCET_DUST;
   try {
+    const isReal = localStorage.getItem(STORAGE_KEY_IS_REAL) === "true";
     const val = localStorage.getItem(STORAGE_KEY_DUST_BALANCE);
     if (!val) {
-      localStorage.setItem(STORAGE_KEY_DUST_BALANCE, DEFAULT_FAUCET_DUST.toFixed(2));
-      return DEFAULT_FAUCET_DUST;
+      if (!isReal) {
+        localStorage.setItem(STORAGE_KEY_DUST_BALANCE, DEFAULT_FAUCET_DUST.toFixed(2));
+        return DEFAULT_FAUCET_DUST;
+      }
+      return 0;
     }
     const parsed = parseFloat(val);
-    // Automatically upgrade legacy mock balance (100.00) to match user's real Lace faucet balance (25,000)
-    if (isNaN(parsed) || parsed <= 100) {
-      localStorage.setItem(STORAGE_KEY_DUST_BALANCE, DEFAULT_FAUCET_DUST.toFixed(2));
-      return DEFAULT_FAUCET_DUST;
+    if (isNaN(parsed)) {
+      return isReal ? 0 : DEFAULT_FAUCET_DUST;
     }
     return parsed;
   } catch {
     return DEFAULT_FAUCET_DUST;
+  }
+}
+
+export function saveStoredDustBalance(amount: number, isReal: boolean = true): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY_DUST_BALANCE, amount.toFixed(2));
+      if (isReal) {
+        localStorage.setItem(STORAGE_KEY_IS_REAL, "true");
+      }
+    } catch {}
   }
 }
 
@@ -63,6 +78,132 @@ export function refillStoredDustBalance(amount: number = DEFAULT_FAUCET_DUST): n
     } catch {}
   }
   return amount;
+}
+
+/**
+ * Directly queries the connected Lace DApp connector for real on-chain tDUST balance.
+ * Supports Midnight DApp connector v4.x (getDustBalance, getShieldedBalances, getUnshieldedBalances)
+ * as well as CIP-30 / Cardano and legacy connector versions.
+ */
+export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ dustBalance: number; isReal: boolean } | null> {
+  if (!api) return null;
+
+  try {
+    // 1. Primary: Midnight DApp Connector v4.x getDustBalance()
+    if (typeof api.getDustBalance === "function") {
+      try {
+        const res = await api.getDustBalance();
+        console.log("[Lace] api.getDustBalance() result:", res);
+        const raw = typeof res === "object" && res !== null ? (res.balance ?? res.amount ?? res.dust) : res;
+        if (raw !== undefined && raw !== null) {
+          const num = typeof raw === "bigint" ? Number(raw) / 1_000_000 : (Number(raw) > 100_000 ? Number(raw) / 1_000_000 : Number(raw));
+          if (!isNaN(num) && num >= 0) {
+            saveStoredDustBalance(num, true);
+            return { dustBalance: num, isReal: true };
+          }
+        }
+      } catch (e) {
+        console.warn("[Lace] getDustBalance() call notice:", e);
+      }
+    }
+
+    // 2. Midnight getShieldedBalances() (returns Record<TokenType, bigint>)
+    if (typeof api.getShieldedBalances === "function") {
+      try {
+        const balances = await api.getShieldedBalances();
+        console.log("[Lace] api.getShieldedBalances() result:", balances);
+        if (balances && typeof balances === "object") {
+          for (const [_, val] of Object.entries(balances)) {
+            if (val !== undefined && val !== null) {
+              const rawVal = typeof val === "bigint" ? Number(val) : Number(val);
+              const formatted = rawVal > 100_000 ? rawVal / 1_000_000 : rawVal;
+              if (!isNaN(formatted) && formatted >= 0) {
+                saveStoredDustBalance(formatted, true);
+                return { dustBalance: formatted, isReal: true };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Lace] getShieldedBalances() call notice:", e);
+      }
+    }
+
+    // 3. Midnight getUnshieldedBalances()
+    if (typeof api.getUnshieldedBalances === "function") {
+      try {
+        const balances = await api.getUnshieldedBalances();
+        console.log("[Lace] api.getUnshieldedBalances() result:", balances);
+        if (balances && typeof balances === "object") {
+          for (const [_, val] of Object.entries(balances)) {
+            if (val !== undefined && val !== null) {
+              const rawVal = typeof val === "bigint" ? Number(val) : Number(val);
+              const formatted = rawVal > 100_000 ? rawVal / 1_000_000 : rawVal;
+              if (!isNaN(formatted) && formatted >= 0) {
+                saveStoredDustBalance(formatted, true);
+                return { dustBalance: formatted, isReal: true };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Lace] getUnshieldedBalances() call notice:", e);
+      }
+    }
+
+    // 4. CIP-30 getBalance()
+    if (typeof api.getBalance === "function") {
+      try {
+        const balRes = await api.getBalance();
+        console.log("[Lace] api.getBalance() result:", balRes);
+        if (balRes !== undefined && balRes !== null) {
+          if (typeof balRes === "string" && /^[0-9a-fA-F]+$/.test(balRes)) {
+            try {
+              const parsedInt = BigInt("0x" + balRes);
+              const num = Number(parsedInt) / 1_000_000;
+              if (!isNaN(num) && num >= 0) {
+                saveStoredDustBalance(num, true);
+                return { dustBalance: num, isReal: true };
+              }
+            } catch {}
+          } else if (typeof balRes === "number" || typeof balRes === "bigint") {
+            const num = typeof balRes === "bigint" ? Number(balRes) / 1_000_000 : balRes;
+            if (!isNaN(num) && num >= 0) {
+              saveStoredDustBalance(num, true);
+              return { dustBalance: num, isReal: true };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Lace] getBalance() call notice:", e);
+      }
+    }
+
+    // 5. Legacy state()
+    if (typeof api.state === "function") {
+      try {
+        const stRes = api.state();
+        const st = typeof stRes?.then === "function" ? await stRes : stRes;
+        if (st && st.balances && typeof st.balances === "object") {
+          for (const [_, val] of Object.entries(st.balances)) {
+            if (val !== undefined && val !== null) {
+              const num = typeof val === "bigint" ? Number(val) / 1_000_000 : Number(val);
+              if (!isNaN(num) && num >= 0) {
+                saveStoredDustBalance(num, true);
+                return { dustBalance: num, isReal: true };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Lace] state() call notice:", e);
+      }
+    }
+  } catch (err) {
+    console.error("[Lace] Balance query error:", err);
+  }
+
+  return null;
 }
 
 export function getActiveLaceApi(): any {
@@ -170,41 +311,12 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
       }
     }
 
-    // C. Query state() for legacy or preview connector versions
-    let liveDustBalance = getStoredDustBalance();
+    // C. Query Live Balance directly from Lace Wallet Extension
+    const liveBal = await fetchLaceLiveBalance(api);
+    const dustBalance = liveBal ? liveBal.dustBalance : getStoredDustBalance();
+    const isRealWallet = liveBal?.isReal ?? true;
 
-    if (typeof api.state === "function") {
-      try {
-        const stRes = api.state();
-        const st = typeof stRes?.then === "function" ? await stRes : stRes;
-        if (st) {
-          primaryAddress = st.address ?? st.shieldedAddress ?? st.unshieldedAddress ?? null;
-          if (st.shieldedAddress) shieldedAddr = st.shieldedAddress;
-          if (st.unshieldedAddress) unshieldedAddr = st.unshieldedAddress;
-
-          // Check if live balances map is returned by Lace
-          if (st.balances && typeof st.balances === "object") {
-            for (const k of Object.keys(st.balances)) {
-              const val = st.balances[k];
-              if (val !== undefined && val !== null) {
-                const numeric = typeof val === "bigint" ? Number(val) / 1_000_000 : Number(val);
-                if (!isNaN(numeric) && numeric > 0) {
-                  liveDustBalance = numeric;
-                  if (typeof window !== "undefined") {
-                    try { localStorage.setItem(STORAGE_KEY_DUST_BALANCE, numeric.toFixed(2)); } catch {}
-                  }
-                  break;
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[Lace] state() notice:", e);
-      }
-    }
-
-    // D. CIP-30 / Cardano Fallbacks
+    // D. CIP-30 / Cardano Fallbacks for addresses
     if (!primaryAddress && !shieldedAddr && !unshieldedAddr) {
       if (typeof api.getAddress === "function") {
         try {
@@ -220,6 +332,13 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
 
     const finalAddress = shieldedAddr ?? unshieldedAddr ?? primaryAddress ?? "midnight-lace-connected";
 
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("umbra_simulated_wallet_connected");
+        localStorage.setItem(STORAGE_KEY_IS_REAL, "true");
+      } catch {}
+    }
+
     return {
       connected: true,
       address: finalAddress,
@@ -227,7 +346,8 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
       unshieldedAddress: unshieldedAddr,
       networkId,
       hasDust: true,
-      dustBalance: liveDustBalance,
+      dustBalance,
+      isRealWallet,
       api,
       error: null,
     };

@@ -14,15 +14,17 @@ export function MidnightOrderSubmitter({
   onOrderSubmitted?: (commitment: string, txHash: string) => void;
 }) {
   const {
-  wallet,
-  dustBalance,
-  connectWallet,
-  createOrderState,
-  signOrderCommitment,
-  setProofStatus,
-  setTxStatus,
-  refillDustBalance,
-} = useMidnight();
+    wallet,
+    dustBalance,
+    connectWallet,
+    createOrderState,
+    signOrderCommitment,
+    setProofStatus,
+    setTxStatus,
+    refillDustBalance,
+    refreshLaceBalance,
+    addBatchOrder,
+  } = useMidnight();
   const dep = deployment();
 
   const [pairIndex, setPairIndex] = useState(0);
@@ -150,6 +152,12 @@ export function MidnightOrderSubmitter({
 
       // Confirmed on Ledger
       setStep("confirmed");
+      addBatchOrder({
+        commitment: orderState.commitment,
+        side,
+        amount: amountStr,
+        price: priceStr,
+      });
       toast.success("Order Registered on Midnight", {
         description: `Commitment #${orderState.commitment.slice(0, 10)}... batched on Preview ledger.`,
       });
@@ -260,7 +268,9 @@ export function MidnightOrderSubmitter({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ fontSize: "12px", fontWeight: "600", color: isConnected ? "#ecfdf5" : "#fef2f2" }} suppressHydrationWarning>
-                {isConnected ? "Lace Wallet Connected (Midnight Preview)" : "Lace Wallet Not Connected"}
+                {isConnected
+                  ? (wallet.isRealWallet ? "Lace Wallet Connected (Live on-chain)" : "Lace Wallet Connected (Midnight Preview)")
+                  : "Lace Wallet Not Connected"}
               </span>
               {isConnected && (
                 <span
@@ -298,28 +308,51 @@ export function MidnightOrderSubmitter({
               Connect Lace
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleRefillFaucet}
-              style={{
-                background: "rgba(168, 85, 247, 0.15)",
-                border: "1px solid rgba(168, 85, 247, 0.35)",
-                color: "#c084fc",
-                fontSize: "11px",
-                fontWeight: "600",
-                padding: "6px 12px",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontFamily: "var(--mono)",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-              title="Copy connected shielded address & open Midnight Preview faucet"
-            >
-              <RefreshCw size={12} />
-              Refill Faucet (+25k tDUST)
-            </button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => refreshLaceBalance()}
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.35)",
+                  color: "#34d399",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  padding: "6px 10px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontFamily: "var(--mono)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+                title="Query live tDUST balance directly from connected Lace extension"
+              >
+                <RefreshCw size={11} />
+                Sync Lace
+              </button>
+              <button
+                type="button"
+                onClick={handleRefillFaucet}
+                style={{
+                  background: "rgba(168, 85, 247, 0.15)",
+                  border: "1px solid rgba(168, 85, 247, 0.35)",
+                  color: "#c084fc",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  padding: "6px 10px",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontFamily: "var(--mono)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+                title="Copy connected shielded address & open Midnight Preview faucet"
+              >
+                Faucet (+25k)
+              </button>
+            </div>
           )}
         </div>
       </div>

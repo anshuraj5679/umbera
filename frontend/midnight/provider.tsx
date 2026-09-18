@@ -11,11 +11,23 @@ import {
   getStoredDustBalance,
   refillStoredDustBalance,
   deductStoredDustBalance,
+  fetchLaceLiveBalance,
   type MidnightWalletState,
 } from "./wallet";
 import { createMidnightProviders, getDefaultConfig, type MidnightClientConfig } from "./client";
 import { PRIVACY_CLASSIFICATION, createPrivateOrder, type PrivateOrderInput, type OrderPrivacyState } from "./privacy";
+import {
+  getStoredBatchId,
+  setStoredBatchId,
+  getStoredBatchStartTime,
+  setStoredBatchStartTime,
+  getStoredBatchOrders,
+  addStoredBatchOrder,
+  BATCH_DURATION_SECONDS,
+  type BatchOrder,
+} from "./batch";
 import { LaceConnectModal } from "../components/LaceConnectModal";
+import { toast } from "sonner";
 
 type MidnightContextType = {
   wallet: MidnightWalletState;
@@ -41,6 +53,16 @@ type MidnightContextType = {
   setTxStatus: (status: "idle" | "submitting" | "confirmed" | "error") => void;
   updateDustBalance: (newBalance: number) => void;
   refillDustBalance: (amount?: number) => void;
+  refreshLaceBalance: () => Promise<void>;
+
+  // Batch Auction Lifecycle
+  batchId: bigint;
+  batchOpen: boolean;
+  remainingSeconds: number;
+  orderCount: bigint;
+  ordersInBatch: BatchOrder[];
+  closeBatch: () => Promise<void>;
+  addBatchOrder: (order: { commitment: string; side: number; amount: string; price: string }) => void;
 };
 
 const MidnightContext = createContext<MidnightContextType>({
@@ -64,6 +86,15 @@ const MidnightContext = createContext<MidnightContextType>({
   setTxStatus: () => {},
   updateDustBalance: () => {},
   refillDustBalance: () => {},
+  refreshLaceBalance: async () => {},
+
+  batchId: 1n,
+  batchOpen: true,
+  remainingSeconds: 300,
+  orderCount: 2n,
+  ordersInBatch: [],
+  closeBatch: async () => {},
+  addBatchOrder: () => {},
 });
 
 export function MidnightProvider({ children }: { children: ReactNode }) {
@@ -82,11 +113,33 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
   const [txStatus, setTxStatus] = useState<"idle" | "submitting" | "confirmed" | "error">("idle");
   const config = getDefaultConfig();
 
+  // Batch auction state
+  const [batchId, setBatchId] = useState<bigint>(1n);
+  const [batchStartTime, setBatchStartTime] = useState<number>(0);
+  const [now, setNow] = useState<number>(0);
+  const [ordersInBatch, setOrdersInBatch] = useState<BatchOrder[]>([]);
+
   useEffect(() => {
     let unmounted = false;
-    // Sync initial stored balance
+
+    // 1. Sync initial stored balance
     const initialBal = getStoredDustBalance();
     setDustBalance(initialBal);
+
+    // 2. Sync batch state from storage
+    const storedId = getStoredBatchId();
+    const storedStart = getStoredBatchStartTime();
+    const initialOrders = getStoredBatchOrders(storedId);
+    setBatchId(storedId);
+    setBatchStartTime(storedStart);
+    setOrdersInBatch(initialOrders);
+
+    const curNow = Math.floor(Date.now() / 1000);
+    setNow(curNow);
+
+    const timer = setInterval(() => {
+      setNow(Math.floor(Date.now() / 1000));
+    }, 1000);
     
     // Check Lace availability with retries for late injection
     const checkAvailability = () => {
@@ -133,8 +186,84 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
     init();
     return () => {
       unmounted = true;
+      clearInterval(timer);
     };
   }, [config.networkId]);
+
+  // Periodic polling for Lace Wallet live balance if real wallet connected
+  useEffect(() => {
+    if (!wallet.connected || !wallet.api || wallet.api?.isSimulated) return;
+
+    let cancel = false;
+    const pollBalance = async () => {
+      try {
+        const res = await fetchLaceLiveBalance(wallet.api);
+        if (!cancel && res && res.dustBalance !== undefined) {
+          setDustBalance(res.dustBalance);
+          setWallet((prev) => ({ ...prev, dustBalance: res.dustBalance, isRealWallet: true }));
+        }
+      } catch (err) {
+        console.warn("[Lace Poll] notice:", err);
+      }
+    };
+
+    const interval = setInterval(pollBalance, 6000);
+    return () => {
+      cancel = true;
+      clearInterval(interval);
+    };
+  }, [wallet.connected, wallet.api]);
+
+  const handleRefreshLaceBalance = useCallback(async () => {
+    if (!wallet.api) return;
+    try {
+      const res = await fetchLaceLiveBalance(wallet.api);
+      if (res && res.dustBalance !== undefined) {
+        setDustBalance(res.dustBalance);
+        setWallet((prev) => ({ ...prev, dustBalance: res.dustBalance, isRealWallet: true }));
+        toast.success("Lace Wallet Balance Synced", {
+          description: `Current live balance: ${res.dustBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} tDUST`,
+        });
+      }
+    } catch (err: any) {
+      toast.error("Failed to sync Lace balance", { description: err?.message });
+    }
+  }, [wallet.api]);
+
+  // Batch timing computation
+  const elapsed = now > 0 && batchStartTime > 0 ? Math.max(0, now - batchStartTime) : 0;
+  const remainingSeconds = Math.max(0, BATCH_DURATION_SECONDS - elapsed);
+  const batchOpen = remainingSeconds > 0;
+
+  const handleCloseBatch = useCallback(async () => {
+    const nextId = batchId + 1n;
+    const newStart = Math.floor(Date.now() / 1000);
+    setBatchId(nextId);
+    setStoredBatchId(nextId);
+    setBatchStartTime(newStart);
+    setStoredBatchStartTime(newStart);
+    const newOrders = getStoredBatchOrders(nextId);
+    setOrdersInBatch(newOrders);
+    toast.success(`Batch #${batchId.toString()} Sealed`, {
+      description: `Advancing to Batch #${nextId.toString()}. New 5-minute sealed window opened.`,
+    });
+  }, [batchId]);
+
+  const handleAddBatchOrder = useCallback((orderData: { commitment: string; side: number; amount: string; price: string }) => {
+    const order: BatchOrder = {
+      id: "ord-" + Date.now() + "-" + Math.random().toString(16).slice(2, 6),
+      batchId: batchId.toString(),
+      commitment: orderData.commitment,
+      side: orderData.side === 0 ? "BUY" : "SELL",
+      amount: parseFloat(orderData.amount || "0"),
+      price: parseFloat(orderData.price || "0"),
+      timestamp: Date.now(),
+      isUserOrder: true,
+      status: "SEALED",
+    };
+    const updated = addStoredBatchOrder(batchId, order);
+    setOrdersInBatch(updated);
+  }, [batchId]);
 
   const handleConnectWallet = useCallback(async () => {
     setWallet((prev) => ({ ...prev, error: null }));
@@ -225,6 +354,15 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
         setTxStatus,
         updateDustBalance: handleUpdateDustBalance,
         refillDustBalance: handleRefillDustBalance,
+        refreshLaceBalance: handleRefreshLaceBalance,
+
+        batchId,
+        batchOpen,
+        remainingSeconds,
+        orderCount: BigInt(ordersInBatch.length),
+        ordersInBatch,
+        closeBatch: handleCloseBatch,
+        addBatchOrder: handleAddBatchOrder,
       }}
     >
       {children}

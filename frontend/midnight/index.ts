@@ -9,4 +9,5 @@ export { getDefaultConfig, createMidnightProviders, type MidnightClientConfig } 
 export { OrderStatus, BatchStatus, createUmbraContract, type UmbraContract, type OrderCommitment, type Nullifier, type SettlementRoot } from "./contract";
 export { computeOrderCommitment, computeOrderNullifier, createPrivateOrder, generateSalt, PRIVACY_CLASSIFICATION, type PrivateOrderInput, type OrderPrivacyState } from "./privacy";
 export { TDUST, TOKEN_A, TOKEN_B, DEFAULT_PAIR, formatAssetAmount, type MidnightAsset } from "./assets";
+export { BATCH_DURATION_SECONDS, getStoredBatchId, getStoredBatchOrders, type BatchOrder } from "./batch";
 export { MidnightProvider, useMidnight } from "./provider";
