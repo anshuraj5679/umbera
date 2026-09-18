@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import {
   connectLace,
+  connectSimulatedLace,
   disconnectLace,
   isLaceAvailable,
   isLaceEnabled,
@@ -14,12 +15,17 @@ import {
 } from "./wallet";
 import { createMidnightProviders, getDefaultConfig, type MidnightClientConfig } from "./client";
 import { PRIVACY_CLASSIFICATION, createPrivateOrder, type PrivateOrderInput, type OrderPrivacyState } from "./privacy";
+import { LaceConnectModal } from "../components/LaceConnectModal";
 
 type MidnightContextType = {
   wallet: MidnightWalletState;
   dustBalance: number;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
+  connectSimulatedWallet: () => void;
+  isConnectModalOpen: boolean;
+  openConnectModal: () => void;
+  closeConnectModal: () => void;
   isLaceAvailable: boolean;
   providersReady: boolean;
   config: MidnightClientConfig;
@@ -42,6 +48,10 @@ const MidnightContext = createContext<MidnightContextType>({
   dustBalance: 25000.0,
   connectWallet: async () => {},
   disconnectWallet: () => {},
+  connectSimulatedWallet: () => {},
+  isConnectModalOpen: false,
+  openConnectModal: () => {},
+  closeConnectModal: () => {},
   isLaceAvailable: false,
   providersReady: false,
   config: getDefaultConfig(),
@@ -67,6 +77,7 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
   });
   const [providersReady, setProvidersReady] = useState(false);
   const [laceAvailable, setLaceAvailable] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [proofStatus, setProofStatus] = useState<"idle" | "generating" | "verified" | "error">("idle");
   const [txStatus, setTxStatus] = useState<"idle" | "submitting" | "confirmed" | "error">("idle");
   const config = getDefaultConfig();
@@ -96,7 +107,14 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
     }
 
     async function init() {
-      if (isLaceAvailable()) {
+      // Check if simulated demo wallet was previously active
+      if (typeof window !== "undefined" && localStorage.getItem("umbra_simulated_wallet_connected") === "true") {
+        const sim = connectSimulatedLace(config.networkId);
+        if (!unmounted) {
+          setWallet(sim);
+          setDustBalance(sim.dustBalance ?? 25000.0);
+        }
+      } else if (isLaceAvailable()) {
         setLaceAvailable(true);
         const enabled = await isLaceEnabled();
         if (enabled && !unmounted) {
@@ -120,11 +138,30 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
 
   const handleConnectWallet = useCallback(async () => {
     setWallet((prev) => ({ ...prev, error: null }));
+    const available = isLaceAvailable();
+    if (!available) {
+      setIsConnectModalOpen(true);
+      return;
+    }
     const res = await connectLace(config.networkId);
     setWallet(res);
-    if (res.dustBalance !== undefined) {
-      setDustBalance(res.dustBalance);
+    if (res.connected) {
+      if (res.dustBalance !== undefined) {
+        setDustBalance(res.dustBalance);
+      }
+      setIsConnectModalOpen(false);
+    } else {
+      setIsConnectModalOpen(true);
     }
+  }, [config.networkId]);
+
+  const handleConnectSimulatedWallet = useCallback(() => {
+    const sim = connectSimulatedLace(config.networkId);
+    setWallet(sim);
+    if (sim.dustBalance !== undefined) {
+      setDustBalance(sim.dustBalance);
+    }
+    setIsConnectModalOpen(false);
   }, [config.networkId]);
 
   const handleDisconnectWallet = useCallback(() => {
@@ -172,6 +209,10 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
         dustBalance,
         connectWallet: handleConnectWallet,
         disconnectWallet: handleDisconnectWallet,
+        connectSimulatedWallet: handleConnectSimulatedWallet,
+        isConnectModalOpen,
+        openConnectModal: () => setIsConnectModalOpen(true),
+        closeConnectModal: () => setIsConnectModalOpen(false),
         isLaceAvailable: laceAvailable || isLaceAvailable(),
         providersReady,
         config,
@@ -187,6 +228,7 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <LaceConnectModal />
     </MidnightContext.Provider>
   );
 }

@@ -404,8 +404,61 @@ export async function isLaceEnabled(): Promise<boolean> {
   }
 }
 
+export function connectSimulatedLace(networkId: string = "preview"): MidnightWalletState {
+  let savedAddr: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      savedAddr = localStorage.getItem("umbra_simulated_shielded_addr");
+    } catch {}
+  }
+  const dummyShielded =
+    savedAddr ||
+    ("mn_shielded_testnet02_" +
+      Math.random().toString(16).slice(2, 10) +
+      Math.random().toString(16).slice(2, 10));
+  const dummyUnshielded = "mn_unshielded_testnet02_" + dummyShielded.slice(-8);
+  const balance = getStoredDustBalance();
+
+  activeLaceApi = {
+    isSimulated: true,
+    getShieldedAddresses: async () => [dummyShielded],
+    getUnshieldedAddress: async () => dummyUnshielded,
+    state: async () => ({
+      address: dummyShielded,
+      shieldedAddress: dummyShielded,
+      unshieldedAddress: dummyUnshielded,
+      balances: { tDUST: balance },
+    }),
+    signData: async (_addr: string, payload: string) => `lace-sig-${payload.slice(0, 16)}`,
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("umbra_simulated_wallet_connected", "true");
+      localStorage.setItem("umbra_simulated_shielded_addr", dummyShielded);
+    } catch {}
+  }
+
+  return {
+    connected: true,
+    address: dummyShielded,
+    shieldedAddress: dummyShielded,
+    unshieldedAddress: dummyUnshielded,
+    networkId,
+    hasDust: true,
+    dustBalance: balance,
+    api: activeLaceApi,
+    error: null,
+  };
+}
+
 export function disconnectLace(): MidnightWalletState {
   activeLaceApi = null;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("umbra_simulated_wallet_connected");
+    } catch {}
+  }
   return {
     connected: false,
     address: null,

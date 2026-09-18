@@ -30,12 +30,14 @@ export function Header() {
 
   const handleConnectClick = async () => {
     try {
+      if (isLaceAvailable) {
+        toast.info("Connecting to Lace Extension", {
+          description: "Approve site access in your Lace extension window.",
+        });
+      }
       await connectWallet();
-      toast.success("Connecting to Lace Wallet", {
-        description: "Approve site access in your Lace extension window.",
-      });
     } catch (err: any) {
-      toast.error("Lace Connection Failed", {
+      toast.error("Lace Connection Notice", {
         description: err?.message ?? "Could not connect to Lace wallet.",
       });
     }
