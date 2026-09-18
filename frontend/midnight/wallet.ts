@@ -25,7 +25,40 @@ let activeLaceApi: any = null;
 
 const STORAGE_KEY_DUST_BALANCE = "umbra_lace_tdust_balance";
 const STORAGE_KEY_IS_REAL = "umbra_is_real_lace_connected";
+const STORAGE_KEY_TOTAL_DEDUCTED = "umbra_lace_cumulative_deductions";
+const STORAGE_KEY_RAW_LACE_BALANCE = "umbra_lace_raw_onchain_balance";
 const DEFAULT_FAUCET_DUST = 25000.0;
+
+export function getCumulativeOrderDeductions(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_TOTAL_DEDUCTED);
+    const n = parseFloat(v || "0");
+    return isNaN(n) ? 0 : n;
+  } catch {
+    return 0;
+  }
+}
+
+export function recordOrderDeduction(amount: number): number {
+  if (amount <= 0) return getStoredDustBalance();
+  const currentDeductions = getCumulativeOrderDeductions();
+  const newDeductions = Math.round((currentDeductions + amount) * 100) / 100;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY_TOTAL_DEDUCTED, newDeductions.toFixed(2));
+    } catch {}
+  }
+  return deductStoredDustBalance(amount);
+}
+
+export function resetOrderDeductions(): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(STORAGE_KEY_TOTAL_DEDUCTED);
+    } catch {}
+  }
+}
 
 export function getStoredDustBalance(): number {
   if (typeof window === "undefined") return DEFAULT_FAUCET_DUST;
@@ -74,10 +107,23 @@ export function deductStoredDustBalance(amount: number): number {
 export function refillStoredDustBalance(amount: number = DEFAULT_FAUCET_DUST): number {
   if (typeof window !== "undefined") {
     try {
+      localStorage.removeItem(STORAGE_KEY_TOTAL_DEDUCTED);
       localStorage.setItem(STORAGE_KEY_DUST_BALANCE, amount.toFixed(2));
     } catch {}
   }
   return amount;
+}
+
+function applyNetLiveBalance(rawBalance: number): { dustBalance: number; isReal: boolean } {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY_RAW_LACE_BALANCE, rawBalance.toFixed(2));
+    } catch {}
+  }
+  const deductions = getCumulativeOrderDeductions();
+  const net = Math.max(0, Math.round((rawBalance - deductions) * 100) / 100);
+  saveStoredDustBalance(net, true);
+  return { dustBalance: net, isReal: true };
 }
 
 /**
@@ -98,8 +144,7 @@ export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ 
         if (raw !== undefined && raw !== null) {
           const num = typeof raw === "bigint" ? Number(raw) / 1_000_000 : (Number(raw) > 100_000 ? Number(raw) / 1_000_000 : Number(raw));
           if (!isNaN(num) && num >= 0) {
-            saveStoredDustBalance(num, true);
-            return { dustBalance: num, isReal: true };
+            return applyNetLiveBalance(num);
           }
         }
       } catch (e) {
@@ -118,8 +163,7 @@ export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ 
               const rawVal = typeof val === "bigint" ? Number(val) : Number(val);
               const formatted = rawVal > 100_000 ? rawVal / 1_000_000 : rawVal;
               if (!isNaN(formatted) && formatted >= 0) {
-                saveStoredDustBalance(formatted, true);
-                return { dustBalance: formatted, isReal: true };
+                return applyNetLiveBalance(formatted);
               }
             }
           }
@@ -140,8 +184,7 @@ export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ 
               const rawVal = typeof val === "bigint" ? Number(val) : Number(val);
               const formatted = rawVal > 100_000 ? rawVal / 1_000_000 : rawVal;
               if (!isNaN(formatted) && formatted >= 0) {
-                saveStoredDustBalance(formatted, true);
-                return { dustBalance: formatted, isReal: true };
+                return applyNetLiveBalance(formatted);
               }
             }
           }
@@ -162,15 +205,13 @@ export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ 
               const parsedInt = BigInt("0x" + balRes);
               const num = Number(parsedInt) / 1_000_000;
               if (!isNaN(num) && num >= 0) {
-                saveStoredDustBalance(num, true);
-                return { dustBalance: num, isReal: true };
+                return applyNetLiveBalance(num);
               }
             } catch {}
           } else if (typeof balRes === "number" || typeof balRes === "bigint") {
             const num = typeof balRes === "bigint" ? Number(balRes) / 1_000_000 : balRes;
             if (!isNaN(num) && num >= 0) {
-              saveStoredDustBalance(num, true);
-              return { dustBalance: num, isReal: true };
+              return applyNetLiveBalance(num);
             }
           }
         }
@@ -189,8 +230,7 @@ export async function fetchLaceLiveBalance(api: any = activeLaceApi): Promise<{ 
             if (val !== undefined && val !== null) {
               const num = typeof val === "bigint" ? Number(val) / 1_000_000 : Number(val);
               if (!isNaN(num) && num >= 0) {
-                saveStoredDustBalance(num, true);
-                return { dustBalance: num, isReal: true };
+                return applyNetLiveBalance(num);
               }
             }
           }
@@ -257,24 +297,56 @@ function getLace() {
   return provider;
 }
 
+export function isUserDeclined(err: any): boolean {
+  if (!err) return false;
+  const msg = (err?.message ?? err?.info ?? (typeof err === "string" ? err : "")).toLowerCase();
+  const code = err?.code;
+  return (
+    code === 2 || // CIP-30 UserDeclined
+    code === -32000 || // RPC user rejected
+    code === 4001 || // EIP-1193 user rejected
+    msg.includes("reject") ||
+    msg.includes("cancel") ||
+    msg.includes("decline") ||
+    msg.includes("denied") ||
+    msg.includes("refused") ||
+    msg.includes("abort") ||
+    msg.includes("closed")
+  );
+}
+
 export async function connectLace(networkId: string = "preview"): Promise<MidnightWalletState> {
   try {
     const lace = getLace();
     
     // Enable/connect according to Midnight DApp connector standard
-    const api =
-      typeof lace.enable === "function"
-        ? await lace.enable()
-        : typeof lace.connect === "function"
-        ? await lace.connect(networkId)
-        : null;
+    let api: any = null;
+
+    if (typeof lace.connect === "function") {
+      try {
+        api = await lace.connect(networkId);
+      } catch (cErr: any) {
+        console.warn("[Lace] lace.connect(networkId) notice:", cErr?.message);
+        try {
+          api = await lace.connect();
+        } catch {}
+      }
+    }
+
+    if (!api && typeof lace.enable === "function") {
+      try {
+        api = await lace.enable();
+      } catch (eErr: any) {
+        console.warn("[Lace] lace.enable() notice:", eErr?.message);
+      }
+    }
 
     if (!api) {
       return {
         connected: false,
         address: null,
         networkId: null,
-        error: "User rejected wallet connection.",
+        error: "User rejected wallet connection or Lace is locked.",
       };
     }
 
@@ -300,14 +372,23 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
       }
     }
 
-    // B. Query Unshielded Address
+    // B. Query Unshielded Address (needed for signing operations)
     if (typeof api.getUnshieldedAddress === "function") {
       try {
         const res = await api.getUnshieldedAddress();
         if (typeof res === "string") unshieldedAddr = res;
-        else if (Array.isArray(res) && res.length > 0) unshieldedAddr = res[0];
+        else if (Array.isArray(res) && res.length > 0) unshieldedAddr = typeof res[0] === "string" ? res[0] : res[0]?.address;
       } catch (e) {
         console.warn("[Lace] getUnshieldedAddress notice:", e);
+      }
+    }
+    if (!unshieldedAddr && typeof api.getUnshieldedAddresses === "function") {
+      try {
+        const res = await api.getUnshieldedAddresses();
+        if (typeof res === "string") unshieldedAddr = res;
+        else if (Array.isArray(res) && res.length > 0) unshieldedAddr = typeof res[0] === "string" ? res[0] : res[0]?.address;
+      } catch (e) {
+        console.warn("[Lace] getUnshieldedAddresses notice:", e);
       }
     }
 
@@ -317,15 +398,21 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
     const isRealWallet = liveBal?.isReal ?? true;
 
     // D. CIP-30 / Cardano Fallbacks for addresses
+    if (!unshieldedAddr && typeof api.getUsedAddresses === "function") {
+      try {
+        const used = await api.getUsedAddresses();
+        unshieldedAddr = Array.isArray(used) ? used[0] : used;
+      } catch {}
+    }
+    if (!unshieldedAddr && typeof api.getChangeAddress === "function") {
+      try {
+        unshieldedAddr = await api.getChangeAddress();
+      } catch {}
+    }
     if (!primaryAddress && !shieldedAddr && !unshieldedAddr) {
       if (typeof api.getAddress === "function") {
         try {
           primaryAddress = await api.getAddress();
-        } catch {}
-      } else if (typeof api.getUsedAddresses === "function") {
-        try {
-          const used = await api.getUsedAddresses();
-          primaryAddress = Array.isArray(used) ? used[0] : used;
         } catch {}
       }
     }
@@ -365,106 +452,201 @@ export async function connectLace(networkId: string = "preview"): Promise<Midnig
 export async function signOrderWithLace(
   address: string,
   commitment: string,
-  orderMetadata?: { side: number; amount: string; price: string; deductAmount?: number }
+  orderMetadata?: { side: number; amount: string; price: string; deductAmount?: number },
+  unshieldedAddress?: string | null
 ): Promise<{ success: boolean; signature?: string; error?: string; txHash?: string; amountDeducted?: number; newBalance?: number }> {
   try {
     let api = activeLaceApi;
-    if (!api) {
-      const conn = await connectLace("preview");
-      api = conn.api ?? activeLaceApi;
+    const laceProvider = getLaceProvider();
+
+    // If API is not active or is simulated while real Lace extension is present, connect real Lace
+    if (!api || (api?.isSimulated && laceProvider)) {
+      if (laceProvider) {
+        console.log("[Lace] Initializing real Lace connection for order authorization...");
+        const conn = await connectLace("preview");
+        if (conn.connected && conn.api) {
+          api = conn.api;
+          activeLaceApi = api;
+        }
+      }
     }
+
     if (!api) {
       throw new Error("Lace wallet is not connected. Please connect Lace first.");
     }
 
-    console.log("[Lace] Authorizing confidential order commitment:", commitment, { address, orderMetadata });
+    // Resolve unshielded / signing address
+    let signingAddress: string | null = unshieldedAddress || null;
+    if (!signingAddress || signingAddress.startsWith("mn_shield")) {
+      if (typeof api.getUnshieldedAddress === "function") {
+        try {
+          const u = await api.getUnshieldedAddress();
+          signingAddress = Array.isArray(u) ? u[0] : (typeof u === "string" ? u : u?.address ?? null);
+        } catch {}
+      }
+    }
+    if (!signingAddress && typeof api.getUnshieldedAddresses === "function") {
+      try {
+        const u = await api.getUnshieldedAddresses();
+        signingAddress = Array.isArray(u) ? u[0] : (typeof u === "string" ? u : u?.address ?? null);
+      } catch {}
+    }
+    if (!signingAddress && typeof api.getUsedAddresses === "function") {
+      try {
+        const used = await api.getUsedAddresses();
+        signingAddress = Array.isArray(used) ? used[0] : used;
+      } catch {}
+    }
+    if (!signingAddress && typeof api.getChangeAddress === "function") {
+      try {
+        signingAddress = await api.getChangeAddress();
+      } catch {}
+    }
+    if (!signingAddress && typeof api.getDustAddress === "function") {
+      try {
+        signingAddress = await api.getDustAddress();
+      } catch {}
+    }
+    if (!signingAddress && address && !address.startsWith("mn_shield")) {
+      signingAddress = address;
+    }
+
+    console.log("[Lace] Authorizing confidential order:", {
+      commitment,
+      signingAddress,
+      shieldedAddress: address,
+      orderMetadata,
+    });
+
+    // Check if running purely in demo simulation mode without real Lace extension
+    if (api.isSimulated && !laceProvider) {
+      console.log("[Lace] Demo mode active without Lace extension. Simulating order confirmation...");
+      await new Promise((r) => setTimeout(r, 600));
+      const deductAmount = orderMetadata?.deductAmount ?? 0;
+      const newBalance = deductAmount > 0 ? recordOrderDeduction(deductAmount) : getStoredDustBalance();
+      return {
+        success: true,
+        signature: `lace-sim-sig-${commitment.slice(0, 16)}`,
+        txHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
+        amountDeducted: deductAmount,
+        newBalance,
+      };
+    }
+
+    const orderSideStr = orderMetadata?.side === 0 ? "BUY" : "SELL";
+    const orderAmt = orderMetadata?.amount || "0";
+    const orderPrice = orderMetadata?.price || "0";
+    const humanReadableMessage = `[Umbera Dark Pool]\nAuthorize Confidential Order Commitment:\nCommitment: ${commitment}\nSide: ${orderSideStr}\nAmount: ${orderAmt}\nLimit Price: ${orderPrice}\nTimestamp: ${Date.now()}`;
+    const textPayloadHex = Buffer.from(humanReadableMessage, "utf8").toString("hex");
+    const cleanCommitment = commitment.startsWith("0x") ? commitment.slice(2) : commitment;
 
     let signature: string | undefined;
     let txHash: string | undefined;
 
-    // 1. Try Lace Transfer / Balancing if available
-    if (typeof api.transferTransaction === "function") {
+    // STEP 1: If Lace supports signData, this is the primary mechanism that opens the native confirmation popup
+    if (typeof api.signData === "function") {
+      // 1A. Try Midnight DApp Connector v4 format: api.signData(data, { encoding: "text" })
       try {
+        console.log("[Lace] Prompting user confirmation via signData(text)...");
+        const res = await api.signData(humanReadableMessage, { encoding: "text" });
+        if (res) {
+          signature = typeof res === "string" ? res : (res.signature ?? JSON.stringify(res));
+          console.log("[Lace] User confirmed via signData text:", signature);
+        }
+      } catch (errText: any) {
+        if (isUserDeclined(errText)) {
+          return { success: false, error: "Order authorization was declined in Lace wallet." };
+        }
+        console.warn("[Lace] signData text format notice:", errText?.message);
+        
+        // 1B. Try Midnight v4 hex encoding: api.signData(cleanCommitment, { encoding: "hex" })
+        try {
+          console.log("[Lace] Prompting user confirmation via signData(hex)...");
+          const resHex = await api.signData(cleanCommitment, { encoding: "hex" });
+          if (resHex) {
+            signature = typeof resHex === "string" ? resHex : (resHex.signature ?? JSON.stringify(resHex));
+            console.log("[Lace] User confirmed via signData hex:", signature);
+          }
+        } catch (errHex: any) {
+          if (isUserDeclined(errHex)) {
+            return { success: false, error: "Order authorization was declined in Lace wallet." };
+          }
+          console.warn("[Lace] signData hex format notice:", errHex?.message);
+        }
+      }
+
+      // 1C. If not signed yet, try CIP-30 format: api.signData(targetAddr, hexPayload)
+      if (!signature) {
+        const targetSigningAddr = signingAddress || (address && !address.startsWith("mn_shield") ? address : null);
+        if (targetSigningAddr) {
+          try {
+            console.log("[Lace] Prompting user confirmation via CIP-30 signData(address, textPayloadHex)...", { targetSigningAddr });
+            const resCip = await api.signData(targetSigningAddr, textPayloadHex);
+            if (resCip) {
+              signature = typeof resCip === "string" ? resCip : (resCip.signature ?? JSON.stringify(resCip));
+              console.log("[Lace] User confirmed via CIP-30 signData:", signature);
+            }
+          } catch (cipErr: any) {
+            if (isUserDeclined(cipErr)) {
+              return { success: false, error: "Order authorization was declined in Lace wallet." };
+            }
+            console.warn("[Lace] CIP-30 signData text notice:", cipErr?.message);
+            try {
+              console.log("[Lace] Prompting user confirmation via CIP-30 signData(address, cleanCommitment)...");
+              const resCipRaw = await api.signData(targetSigningAddr, cleanCommitment);
+              if (resCipRaw) {
+                signature = typeof resCipRaw === "string" ? resCipRaw : (resCipRaw.signature ?? JSON.stringify(resCipRaw));
+                console.log("[Lace] User confirmed via CIP-30 raw signData:", signature);
+              }
+            } catch (cipRawErr: any) {
+              if (isUserDeclined(cipRawErr)) {
+                return { success: false, error: "Order authorization was declined in Lace wallet." };
+              }
+              console.warn("[Lace] CIP-30 signData raw notice:", cipRawErr?.message);
+            }
+          }
+        }
+      }
+    }
+
+    // STEP 2: Try Lace signTx if signData was not supported
+    if (!signature && typeof api.signTx === "function") {
+      try {
+        console.log("[Lace] Prompting user confirmation via signTx...");
+        const resTx = await api.signTx(cleanCommitment, true);
+        if (resTx) {
+          signature = typeof resTx === "string" ? resTx : JSON.stringify(resTx);
+        }
+      } catch (txErr: any) {
+        if (isUserDeclined(txErr)) {
+          return { success: false, error: "Order authorization was declined in Lace wallet." };
+        }
+        console.warn("[Lace] signTx notice:", txErr?.message);
+      }
+    }
+
+    // STEP 3: Try Lace transferTransaction if available
+    if (!signature && typeof api.transferTransaction === "function") {
+      try {
+        console.log("[Lace] Prompting user confirmation via transferTransaction...");
         const amtUnits = BigInt(Math.floor(parseFloat(orderMetadata?.amount || "10") * 1_000_000));
-        await api.transferTransaction([
+        const resTransfer = await api.transferTransaction([
           {
             amount: amtUnits,
             type: "tDUST",
-            receiverAddress: address,
+            receiverAddress: signingAddress || address,
           },
         ]);
-        signature = "lace-transfer-approved";
+        signature = typeof resTransfer === "string" ? resTransfer : "lace-transfer-approved";
       } catch (tErr: any) {
+        if (isUserDeclined(tErr)) {
+          return { success: false, error: "Order authorization was declined in Lace wallet." };
+        }
         console.warn("[Lace] transferTransaction notice:", tErr?.message);
       }
     }
 
-    // 2. Try Lace modern connector balancing methods:
-    if (!signature && typeof api.balanceUnsealedTransaction === "function") {
-      try {
-        const res = await api.balanceUnsealedTransaction({ commitment, amount: orderMetadata?.amount });
-        signature = typeof res === "string" ? res : "lace-unsealed-approved";
-      } catch (uErr: any) {
-        console.warn("[Lace] balanceUnsealedTransaction notice:", uErr?.message);
-      }
-    }
-
-    if (!signature && typeof api.balanceSealedTransaction === "function") {
-      try {
-        const res = await api.balanceSealedTransaction({ commitment, amount: orderMetadata?.amount });
-        signature = typeof res === "string" ? res : "lace-sealed-approved";
-      } catch (sErr: any) {
-        console.warn("[Lace] balanceSealedTransaction notice:", sErr?.message);
-      }
-    }
-
-    if (!signature && typeof api.balanceAndProveTransaction === "function") {
-      try {
-        const res = await api.balanceAndProveTransaction({ commitment, amount: orderMetadata?.amount }, []);
-        signature = typeof res === "string" ? res : "lace-proved-approved";
-      } catch (pErr: any) {
-        console.warn("[Lace] balanceAndProveTransaction notice:", pErr?.message);
-      }
-    }
-
-    // 3. Try legacy balanceTx / balanceTransaction:
-    if (!signature && (typeof api.balanceTx === "function" || typeof api.balanceTransaction === "function")) {
-      try {
-        const fn = api.balanceTx ?? api.balanceTransaction;
-        await fn({ commitment, amount: orderMetadata?.amount });
-        signature = "lace-balanced-approved";
-      } catch (bErr: any) {
-        console.warn("[Lace] balanceTx notice:", bErr?.message);
-      }
-    }
-
-    // 3. Safe CIP-30 signData attempt
-    if (!signature && typeof api.signData === "function") {
-      try {
-        const payloadHex = commitment.startsWith("0x") ? commitment.slice(2) : commitment;
-        const res = await api.signData(address, payloadHex);
-        signature = typeof res === "string" ? res : res?.signature ?? JSON.stringify(res);
-      } catch (encErr: any) {
-        console.warn("[Lace] signData encoding fallback:", encErr?.message);
-        try {
-          const textPayload = Buffer.from(`UMBRA-ORDER-${commitment.slice(0, 16)}`, "utf8").toString("hex");
-          const res2 = await api.signData(address, textPayload);
-          signature = typeof res2 === "string" ? res2 : res2?.signature ?? JSON.stringify(res2);
-        } catch {}
-      }
-    }
-
-    // 4. If Lace supports signTx:
-    if (!signature && typeof api.signTx === "function") {
-      try {
-        const res = await api.signTx(commitment, true);
-        signature = typeof res === "string" ? res : JSON.stringify(res);
-      } catch (err: any) {
-        console.warn("[Lace] signTx notice:", err?.message);
-      }
-    }
-
-    // 5. If Lace has submitTx / submitTransaction:
+    // STEP 4: If Lace has submitTx / submitTransaction
     if (typeof api.submitTx === "function" || typeof api.submitTransaction === "function") {
       try {
         const fn = api.submitTx ?? api.submitTransaction;
@@ -476,39 +658,42 @@ export async function signOrderWithLace(
       }
     }
 
-    // Calculate deduction
+    // STEP 5: Validate that signature was obtained
+    if (!signature) {
+      if (laceProvider && !api.isSimulated) {
+        return {
+          success: false,
+          error: "Lace wallet did not approve the confidential order. Please ensure Lace is unlocked and permissions are granted.",
+        };
+      }
+      signature = `lace-auth-${cleanCommitment.slice(0, 16)}`;
+    }
+
+    // STEP 6: Record Persistent Deduction and Return Result
     const deductAmount = orderMetadata?.deductAmount ?? 0;
     let newBalance = getStoredDustBalance();
     if (deductAmount > 0) {
-      newBalance = deductStoredDustBalance(deductAmount);
+      newBalance = recordOrderDeduction(deductAmount);
     }
 
     return {
       success: true,
-      signature: signature ?? `lace-sig-${commitment.slice(0, 16)}`,
+      signature,
       txHash,
       amountDeducted: deductAmount,
       newBalance,
     };
   } catch (err: any) {
     console.error("[Lace] User signature / approval notice:", err);
-    if (
-      err?.message?.toLowerCase().includes("reject") ||
-      err?.message?.toLowerCase().includes("cancel") ||
-      err?.message?.toLowerCase().includes("declined")
-    ) {
+    if (isUserDeclined(err)) {
       return {
         success: false,
         error: "Order authorization was declined in Lace wallet.",
       };
     }
-    const deductAmount = orderMetadata?.deductAmount ?? 0;
-    const newBalance = deductAmount > 0 ? deductStoredDustBalance(deductAmount) : getStoredDustBalance();
     return {
-      success: true,
-      signature: `lace-auth-${commitment.slice(0, 12)}`,
-      amountDeducted: deductAmount,
-      newBalance,
+      success: false,
+      error: err?.message ?? "Failed to authorize order with Lace wallet.",
     };
   }
 }

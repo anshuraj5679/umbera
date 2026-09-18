@@ -321,14 +321,19 @@ export function MidnightProvider({ children }: { children: ReactNode }) {
       if (!wallet.address) {
         return { success: false, error: "Lace wallet is not connected" };
       }
-      const res = await signOrderWithLace(wallet.address, commitment, metadata);
+      const res = await signOrderWithLace(
+        wallet.address,
+        commitment,
+        metadata,
+        wallet.unshieldedAddress
+      );
       if (res.newBalance !== undefined) {
         setDustBalance(res.newBalance);
         setWallet((prev) => ({ ...prev, dustBalance: res.newBalance }));
       }
       return res;
     },
-    [wallet.address]
+    [wallet.address, wallet.unshieldedAddress]
   );
 
   return (
